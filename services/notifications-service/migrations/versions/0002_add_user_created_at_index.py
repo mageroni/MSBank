@@ -13,7 +13,7 @@ down_revision = "0001_create_notifications"
 branch_labels = None
 depends_on = None
 
-
+def upgrade() -> None:
 def upgrade() -> None:
     # Keep this migration id for backward compatibility with existing DB state.
     op.execute(
