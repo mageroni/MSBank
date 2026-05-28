@@ -1,0 +1,132 @@
+# Default values for web-portal. Most globals come from the umbrella chart;
+# only sub-chart-specific knobs live here.
+
+# Globals are normally injected by the umbrella chart. The defaults below
+# allow this sub-chart to be installed standalone for dev/testing.
+global:
+  namespace: msbank
+  image:
+    registry: acr.azurecr.io
+    repositoryPrefix: msbank
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+    pullSecrets:
+      - name: acr-pull-secret
+  otel:
+    endpoint: http://otel-collector.observability.svc.cluster.local:4317
+    serviceNamespace: msbank
+  workloadIdentity:
+    enabled: true
+    tenantId: "00000000-0000-0000-0000-000000000000"
+  kafka:
+    bootstrapServers: ""
+    securityProtocol: SASL_SSL
+    saslMechanism: PLAIN
+    saslUsername: "$ConnectionString"
+  postgres:
+    host: ""
+    port: 5432
+    user: msbank
+    sslMode: require
+  redis:
+    host: ""
+    port: 6380
+    tls: true
+  ingress:
+    enabled: true
+    className: nginx
+    tls:
+      enabled: true
+      clusterIssuer: letsencrypt-prod
+    annotations: {}
+  domain: msbank.example.com
+  auth:
+    issuer: "https://auth.msbank.example.com"
+    audience: "msbank"
+    accessTtlSeconds: 900
+    refreshTtlSeconds: 2592000
+  nodeSelector: {}
+  pod:
+    topologySpread:
+      enabled: false
+
+replicaCount: 2
+
+# Workload identity client ID (UUID of the Azure managed identity for this svc)
+workloadIdentityClientId: "00000000-0000-0000-0000-000000000006"
+
+image:
+  # registry: <override of global>
+  # repository: msbank/web-portal
+  # tag: 0.1.0
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 3000
+  targetPort: 3000
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+logLevel: info
+
+probes:
+  startup:
+    path: /healthz
+  readiness:
+    path: /readyz
+  liveness:
+    path: /healthz
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+readOnlyRootFilesystem: true
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true
+  allowIngressFromIngressController: false
+  extraEgress: []
+
+podAnnotations: {}
+extraEnv: {}
+env: []
+extraVolumes: []
+extraVolumeMounts: []
+
+readOnlyRootFilesystem: false  # Next.js needs writable .next/cache at runtime
+
+networkPolicy:
+  enabled: true
+  allowIngressFromIngressController: true
+  extraEgress: []
+
+ingress:
+  enabled: true
+  # When false (default), traffic to app.<domain> is handled by the api-gateway
+  # umbrella Ingress. Set true to publish a separate Ingress object for web-portal.
+  standalone: false
+
+extraEnv:
+  NEXT_PUBLIC_API_BASE_URL: "https://msbank.example.com"
+  PORT: "3000"
+

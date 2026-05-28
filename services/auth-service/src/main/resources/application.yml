@@ -1,0 +1,115 @@
+spring:
+  application:
+    name: auth-service
+  datasource:
+    url: ${AUTH_DB_URL:jdbc:postgresql://localhost:5432/auth}
+    username: ${POSTGRES_USER:msbank}
+    password: ${POSTGRES_PASSWORD:msbank_dev_only}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc.time_zone: UTC
+        format_sql: false
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+        delivery.timeout.ms: 30000
+        request.timeout.ms: 10000
+        security.protocol: ${KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
+
+server:
+  port: 8081
+  error:
+    include-message: always
+  forward-headers-strategy: framework
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when_authorized
+  metrics:
+    tags:
+      application: auth-service
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+
+otel:
+  exporter:
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
+  service:
+    name: auth-service
+  metrics:
+    exporter: none
+  logs:
+    exporter: none
+
+auth:
+  jwt:
+    issuer: ${JWT_ISSUER:https://auth.msbank.local}
+    audience: ${JWT_AUDIENCE:msbank}
+    access-ttl-seconds: ${JWT_ACCESS_TTL_SECONDS:900}
+    refresh-ttl-seconds: ${JWT_REFRESH_TTL_SECONDS:2592000}
+    private-key-path: ${JWT_PRIVATE_KEY_PATH:./keys/jwt_private.pem}
+    public-key-path: ${JWT_PUBLIC_KEY_PATH:./keys/jwt_public.pem}
+    key-id: ${JWT_KEY_ID:auth-key-1}
+  outbox:
+    poll-interval-ms: 500
+    batch-size: 50
+    max-attempts: 8
+  kafka:
+    user-events-topic: ${USER_EVENTS_TOPIC:user-events}
+  ratelimit:
+    login-per-minute: 10
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      kafka-publisher:
+        sliding-window-size: 20
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+  retry:
+    instances:
+      kafka-publisher:
+        max-attempts: 3
+        wait-duration: 200ms
+        exponential-backoff-multiplier: 2
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
+    com.msbank.auth: INFO
+    org.springframework.kafka: WARN
+    org.hibernate.SQL: WARN

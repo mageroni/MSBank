@@ -1,0 +1,1 @@
+MS Bank: transfer {{ transfer_id }} for {{ amount }} completed. Ref: {{ transfer_id }}.

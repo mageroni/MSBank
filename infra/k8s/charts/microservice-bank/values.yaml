@@ -1,0 +1,163 @@
+# =============================================================================
+# Umbrella values for microservice-bank
+# =============================================================================
+# All sub-charts read defaults from .Values.global.* and merge with their own
+# values. Secrets must NEVER be set here — only object references resolved by
+# the Secrets Store CSI driver from Azure Key Vault.
+# =============================================================================
+
+global:
+  # ---- Namespace / cluster ----
+  namespace: msbank
+  createNamespace: true
+
+  # ---- Image registry ----
+  image:
+    registry: acr.azurecr.io
+    repositoryPrefix: msbank
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+    pullSecrets:
+      - name: acr-pull-secret
+
+  # ---- Public DNS / ingress ----
+  domain: msbank.example.com
+  ingress:
+    enabled: true
+    className: nginx
+    tls:
+      enabled: true
+      # cert-manager ClusterIssuer name
+      clusterIssuer: letsencrypt-prod
+    annotations: {}
+
+  # ---- Observability ----
+  otel:
+    endpoint: http://otel-collector.observability.svc.cluster.local:4317
+    serviceNamespace: msbank
+
+  # ---- Azure Workload Identity ----
+  # https://azure.github.io/azure-workload-identity/
+  workloadIdentity:
+    enabled: true
+    tenantId: "00000000-0000-0000-0000-000000000000"
+    # Per-service managed-identity client IDs (placeholders).
+    clientIds:
+      apiGateway: "00000000-0000-0000-0000-000000000001"
+      authService: "00000000-0000-0000-0000-000000000002"
+      accountsService: "00000000-0000-0000-0000-000000000003"
+      transactionsService: "00000000-0000-0000-0000-000000000004"
+      notificationsService: "00000000-0000-0000-0000-000000000005"
+      webPortal: "00000000-0000-0000-0000-000000000006"
+
+  # ---- Secrets Store CSI driver / Azure Key Vault ----
+  keyVault:
+    name: "kv-msbank-placeholder"
+    tenantId: "00000000-0000-0000-0000-000000000000"
+    # Object references — actual secret material lives in Key Vault.
+    objects:
+      - objectName: jwt-private-key
+        objectType: secret
+        envVar: JWT_PRIVATE_KEY
+      - objectName: jwt-public-key
+        objectType: secret
+        envVar: JWT_PUBLIC_KEY
+      - objectName: auth-db-password
+        objectType: secret
+        envVar: AUTH_DB_PASSWORD
+      - objectName: accounts-db-password
+        objectType: secret
+        envVar: ACCOUNTS_DB_PASSWORD
+      - objectName: transactions-db-password
+        objectType: secret
+        envVar: TRANSACTIONS_DB_PASSWORD
+      - objectName: notifications-db-password
+        objectType: secret
+        envVar: NOTIFICATIONS_DB_PASSWORD
+      - objectName: eventhubs-connection-string
+        objectType: secret
+        envVar: KAFKA_SASL_PASSWORD
+      - objectName: internal-token
+        objectType: secret
+        envVar: INTERNAL_TOKEN
+      - objectName: redis-password
+        objectType: secret
+        envVar: REDIS_PASSWORD
+
+  # ---- Kafka / Event Hubs (Kafka-compat surface) ----
+  kafka:
+    bootstrapServers: "<namespace>.servicebus.windows.net:9093"
+    securityProtocol: SASL_SSL
+    saslMechanism: PLAIN
+    saslUsername: "$ConnectionString"
+
+  # ---- Postgres (Azure Database for PostgreSQL Flexible Server) ----
+  postgres:
+    host: "msbank-pg.postgres.database.azure.com"
+    port: 5432
+    sslMode: require
+    user: "msbank"
+    databases:
+      auth: auth
+      accounts: accounts
+      transactions: transactions
+      notifications: notifications
+
+  # ---- Redis (Azure Cache for Redis) ----
+  redis:
+    host: "msbank.redis.cache.windows.net"
+    port: 6380
+    tls: true
+
+  # ---- JWT / Auth ----
+  auth:
+    issuer: "https://auth.msbank.example.com"
+    audience: "msbank"
+    accessTtlSeconds: 900
+    refreshTtlSeconds: 2592000
+
+  # ---- Common pod security defaults ----
+  podSecurity:
+    enforce: restricted
+    audit: restricted
+    warn: restricted
+
+  # ---- Network policy ----
+  networkPolicy:
+    defaultDeny: true
+    # CIDR blocks egress is allowed to reach for managed Azure services.
+    # In a real deployment these would be locked down to PE subnets.
+    allowedEgressCIDRs:
+      - 10.0.0.0/8
+      - 168.63.129.16/32   # Azure metadata
+    # Ports allowed for egress to managed services.
+    allowedEgressPorts:
+      - 443  # HTTPS / Azure ARM / Key Vault / Event Hubs control plane
+      - 5432 # PostgreSQL
+      - 6380 # Redis TLS
+      - 9093 # Event Hubs Kafka
+
+# -----------------------------------------------------------------------------
+# Sub-chart toggles. Each sub-chart's `enabled` flag drives the dependency
+# condition declared in Chart.yaml.
+# -----------------------------------------------------------------------------
+api-gateway:
+  enabled: true
+auth-service:
+  enabled: true
+accounts-service:
+  enabled: true
+transactions-service:
+  enabled: true
+notifications-service:
+  enabled: true
+web-portal:
+  enabled: true
+
+# In-cluster data plane — OFF by default. Enable in values-local.yaml.
+postgresql:
+  enabled: false
+kafka:
+  enabled: false
+redis:
+  enabled: false

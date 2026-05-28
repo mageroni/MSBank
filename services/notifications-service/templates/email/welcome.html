@@ -1,0 +1,15 @@
+{% extends "email/_base.html" %}
+{% block content %}
+  <h2>Welcome, {{ first_name }}!</h2>
+  <p>
+    Thanks for joining Microservice Bank. Your account is set up and ready to
+    explore.
+  </p>
+  <p>
+    <a class="btn" href="https://app.msbank.local/onboarding">Finish setting up</a>
+  </p>
+  <p>
+    If you didn't create this account, please contact our support team
+    immediately.
+  </p>
+{% endblock %}

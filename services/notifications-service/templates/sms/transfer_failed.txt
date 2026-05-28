@@ -1,0 +1,1 @@
+MS Bank: transfer {{ transfer_id }} for {{ amount }} FAILED{% if failure_reason %} ({{ failure_reason }}){% endif %}. No funds were moved.

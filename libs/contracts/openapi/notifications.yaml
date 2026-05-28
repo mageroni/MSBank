@@ -1,0 +1,74 @@
+openapi: 3.1.0
+info:
+  title: Notifications Service API
+  version: 1.0.0
+  description: |
+    Consumes domain events from Kafka and dispatches templated notifications
+    over email/SMS/webhook. Exposes management endpoints for templates and
+    delivery status inspection.
+servers:
+  - url: http://notifications-service:8084
+paths:
+  /healthz: { get: { responses: { '200': { description: OK } } } }
+  /readyz:  { get: { responses: { '200': { description: Ready } } } }
+  /api/v1/notifications:
+    get:
+      summary: List notifications for the authenticated user
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query, name: channel, schema: { type: string, enum: [EMAIL, SMS, WEBHOOK] }
+        - in: query, name: status, schema: { type: string, enum: [PENDING, SENT, FAILED, DEAD_LETTERED] }
+        - in: query, name: limit, schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Notification' }
+  /api/v1/notifications/{id}:
+    get:
+      summary: Get notification by id
+      security: [{ bearerAuth: [] }]
+      parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: Notification
+          content: { application/json: { schema: { $ref: '#/components/schemas/Notification' } } }
+  /api/v1/notifications/test:
+    post:
+      summary: Send a test notification (admin)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel, to, templateKey]
+              properties:
+                channel: { type: string, enum: [EMAIL, SMS, WEBHOOK] }
+                to: { type: string }
+                templateKey: { type: string }
+                context: { type: object }
+      responses: { '202': { description: Accepted } }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    Notification:
+      type: object
+      required: [id, channel, to, status, templateKey, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        channel: { type: string, enum: [EMAIL, SMS, WEBHOOK] }
+        to: { type: string }
+        subject: { type: string }
+        templateKey: { type: string }
+        status: { type: string, enum: [PENDING, SENT, FAILED, DEAD_LETTERED] }
+        attempts: { type: integer }
+        lastError: { type: string }
+        createdAt: { type: string, format: date-time }
+        sentAt: { type: string, format: date-time }

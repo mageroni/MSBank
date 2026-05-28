@@ -1,0 +1,21 @@
+{{- /*
+PodSecurity admission labels are applied to the namespace. This file is a
+no-op when createNamespace=false; it documents the intended labels and can be
+applied manually via `kubectl label namespace`.
+*/ -}}
+{{- if and (not .Values.global.createNamespace) .Values.global.podSecurity -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "msbank.fullname" . }}-podsecurity-doc
+  namespace: {{ include "msbank.namespace" . }}
+  labels:
+    {{- include "msbank.labels" . | nindent 4 }}
+data:
+  README: |
+    To enforce PodSecurity on the existing namespace, run:
+      kubectl label namespace {{ include "msbank.namespace" . }} \
+        pod-security.kubernetes.io/enforce={{ .Values.global.podSecurity.enforce }} \
+        pod-security.kubernetes.io/audit={{ .Values.global.podSecurity.audit }} \
+        pod-security.kubernetes.io/warn={{ .Values.global.podSecurity.warn }} --overwrite
+{{- end -}}

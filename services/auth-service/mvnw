@@ -1,0 +1,62 @@
+#!/bin/sh
+# ----------------------------------------------------------------------------
+# Apache Maven Wrapper startup batch script, version 3.3.2
+# ----------------------------------------------------------------------------
+set -euf
+[ "${MVNW_VERBOSE-}" != debug ] || set -x
+
+# OS specific support.
+native_path() { printf %s\\n "$1"; }
+case "$(uname)" in
+CYGWIN* | MINGW*)
+  [ -z "${JAVA_HOME-}" ] || JAVA_HOME="$(cygpath --unix "$JAVA_HOME")"
+  native_path() { cygpath --path --windows "$1"; }
+  ;;
+esac
+
+# set JAVACMD and JAVACCMD
+set_java_home() {
+  if [ -n "${JAVA_HOME-}" ]; then
+    if [ -x "$JAVA_HOME/jre/sh/java" ]; then
+      JAVACMD="$JAVA_HOME/jre/sh/java"
+      JAVACCMD="$JAVA_HOME/jre/sh/javac"
+    else
+      JAVACMD="$JAVA_HOME/bin/java"
+      JAVACCMD="$JAVA_HOME/bin/javac"
+      if [ ! -x "$JAVACMD" ] || [ ! -x "$JAVACCMD" ]; then
+        echo "The JAVA_HOME environment variable is not defined correctly, so mvnw cannot run." >&2
+        echo "JAVA_HOME is set to \"$JAVA_HOME\", but \"\$JAVA_HOME/bin/java\" or \"\$JAVA_HOME/bin/javac\" does not exist." >&2
+        return 1
+      fi
+    fi
+  else
+    JAVACMD="$(command -v java)" || :
+    JAVACCMD="$(command -v javac)" || :
+    if [ ! -x "${JAVACMD-}" ] || [ ! -x "${JAVACCMD-}" ]; then
+      echo "The java/javac command does not exist in PATH nor is JAVA_HOME set." >&2
+      return 1
+    fi
+  fi
+}
+
+set_java_home
+
+wrapper_url="$(sed -n 's/^wrapperUrl=//p' "$(dirname "$0")/.mvn/wrapper/maven-wrapper.properties" | tr -d '\r')"
+wrapper_jar="$(dirname "$0")/.mvn/wrapper/maven-wrapper.jar"
+
+if [ ! -r "$wrapper_jar" ]; then
+  echo "Downloading Maven Wrapper from $wrapper_url" >&2
+  if command -v curl >/dev/null; then
+    curl -fSsLo "$wrapper_jar" "$wrapper_url"
+  elif command -v wget >/dev/null; then
+    wget -qO "$wrapper_jar" "$wrapper_url"
+  else
+    echo "Either curl or wget is required to download the Maven Wrapper." >&2
+    exit 1
+  fi
+fi
+
+exec "$JAVACMD" \
+  -classpath "$(native_path "$wrapper_jar")" \
+  "-Dmaven.multiModuleProjectDirectory=$(native_path "$(dirname "$0")")" \
+  org.apache.maven.wrapper.MavenWrapperMain "$@"

@@ -1,0 +1,66 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+
+# Env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+.next/
+out/
+dist/
+build/
+coverage/
+
+# Java / Maven / Gradle
+target/
+*.class
+.gradle/
+build/
+.mvn/
+!.mvn/wrapper/maven-wrapper.properties
+hs_err_pid*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Go
+bin/
+*.exe
+*.test
+*.out
+vendor/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+
+# Logs
+logs/
+*.log
+
+# Docker
+.docker/

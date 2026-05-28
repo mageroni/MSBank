@@ -1,0 +1,7 @@
+apiVersion: v2
+name: transactions-service
+description: Go transactions service for microservice-bank.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.28.0-0"

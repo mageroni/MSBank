@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/auth
+  kafka:
+    bootstrap-servers: localhost:9092
+
+auth:
+  jwt:
+    private-key-path: ./keys/jwt_private.pem
+    public-key-path: ./keys/jwt_public.pem

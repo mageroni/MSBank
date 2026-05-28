@@ -1,0 +1,46 @@
+openapi: 3.1.0
+info:
+  title: API Gateway (BFF)
+  version: 1.0.0
+  description: |
+    Edge API for the web portal. Validates JWTs, applies rate-limiting and
+    idempotency, and either proxies to upstream services or composes BFF
+    responses for the dashboard. Adds `x-correlation-id` to all upstream calls.
+servers:
+  - url: http://localhost:8080
+paths:
+  /healthz: { get: { responses: { '200': { description: OK } } } }
+  /readyz:  { get: { responses: { '200': { description: Ready } } } }
+
+  # ---- Pass-through (selected) ----
+  /api/v1/auth/register: { post: { $ref: 'auth.yaml#/paths/~1api~1v1~1auth~1register/post' } }
+  /api/v1/auth/login:    { post: { $ref: 'auth.yaml#/paths/~1api~1v1~1auth~1login/post' } }
+  /api/v1/auth/refresh:  { post: { $ref: 'auth.yaml#/paths/~1api~1v1~1auth~1refresh/post' } }
+  /api/v1/auth/me:       { get:  { $ref: 'auth.yaml#/paths/~1api~1v1~1auth~1me/get' } }
+  /api/v1/accounts:      { get:  { $ref: 'accounts.yaml#/paths/~1api~1v1~1accounts/get' },
+                           post: { $ref: 'accounts.yaml#/paths/~1api~1v1~1accounts/post' } }
+  /api/v1/transfers:     { post: { $ref: 'transactions.yaml#/paths/~1api~1v1~1transfers/post' },
+                           get:  { $ref: 'transactions.yaml#/paths/~1api~1v1~1transfers/get' } }
+  /api/v1/notifications: { get:  { $ref: 'notifications.yaml#/paths/~1api~1v1~1notifications/get' } }
+
+  # ---- BFF aggregates ----
+  /bff/v1/dashboard:
+    get:
+      summary: Aggregated dashboard payload (accounts + recent transfers + unread notifications)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Dashboard
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accounts: { type: array, items: { type: object } }
+                  recentTransfers: { type: array, items: { type: object } }
+                  unreadNotifications: { type: integer }
+                  totalBalance: { type: integer, format: int64 }
+                  asOf: { type: string, format: date-time }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }

@@ -1,0 +1,188 @@
+openapi: 3.1.0
+info:
+  title: Accounts Service API
+  version: 1.0.0
+  description: |
+    Customer account management via Event Sourcing + CQRS.
+    Write side: command handlers append events to the event store.
+    Read side: projections expose query endpoints.
+    All monetary amounts use integer minor units (e.g., cents).
+servers:
+  - url: http://accounts-service:8082
+paths:
+  /healthz: { get: { responses: { '200': { description: OK } } } }
+  /readyz:  { get: { responses: { '200': { description: Ready } } } }
+  /api/v1/accounts:
+    post:
+      summary: Open a new account (command)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenAccountCommand' }
+      responses:
+        '201':
+          description: Account opened
+          content: { application/json: { schema: { $ref: '#/components/schemas/Account' } } }
+    get:
+      summary: List accounts for the authenticated customer
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [ACTIVE, FROZEN, CLOSED] }
+      responses:
+        '200':
+          description: Account list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Account' }
+  /api/v1/accounts/{accountId}:
+    get:
+      summary: Get account by id
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/AccountId' }]
+      responses:
+        '200':
+          description: Account
+          content: { application/json: { schema: { $ref: '#/components/schemas/Account' } } }
+        '404': { description: Not found }
+  /api/v1/accounts/{accountId}/events:
+    get:
+      summary: Event history for an account (audit)
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/AccountId' }]
+      responses:
+        '200':
+          description: Event stream
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DomainEvent' }
+  /api/v1/accounts/{accountId}/deposits:
+    post:
+      summary: Deposit funds (command)
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/AccountId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MoneyOpCommand' }
+      responses:
+        '202': { description: Accepted }
+  /api/v1/accounts/{accountId}/withdrawals:
+    post:
+      summary: Withdraw funds (command)
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/AccountId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MoneyOpCommand' }
+      responses:
+        '202': { description: Accepted }
+        '422': { description: Insufficient funds }
+  /api/v1/accounts/{accountId}/freeze:
+    post:
+      summary: Freeze account (command)
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/AccountId' }]
+      responses: { '202': { description: Accepted } }
+  /internal/api/v1/accounts/{accountId}/reservations:
+    post:
+      summary: |
+        Reserve funds for a saga (internal). Idempotent per reservationId.
+      parameters: [{ $ref: '#/components/parameters/AccountId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReserveCommand' }
+      responses:
+        '201': { description: Reserved }
+        '422': { description: Insufficient funds }
+  /internal/api/v1/accounts/{accountId}/reservations/{reservationId}/commit:
+    post:
+      summary: Commit a reservation (internal)
+      parameters:
+        - { $ref: '#/components/parameters/AccountId' }
+        - in: path, name: reservationId, required: true, schema: { type: string, format: uuid }
+      responses: { '200': { description: Committed } }
+  /internal/api/v1/accounts/{accountId}/reservations/{reservationId}/release:
+    post:
+      summary: Release (compensate) a reservation (internal)
+      parameters:
+        - { $ref: '#/components/parameters/AccountId' }
+        - in: path, name: reservationId, required: true, schema: { type: string, format: uuid }
+      responses: { '200': { description: Released } }
+components:
+  parameters:
+    AccountId:
+      in: path
+      name: accountId
+      required: true
+      schema: { type: string, format: uuid }
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    Money:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount: { type: integer, format: int64, description: 'Minor units (e.g., cents)' }
+        currency: { type: string, minLength: 3, maxLength: 3, example: USD }
+    OpenAccountCommand:
+      type: object
+      required: [accountType, currency]
+      properties:
+        accountType: { type: string, enum: [CHECKING, SAVINGS] }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        nickname: { type: string }
+    MoneyOpCommand:
+      type: object
+      required: [idempotencyKey, money]
+      properties:
+        idempotencyKey: { type: string, format: uuid }
+        money: { $ref: '#/components/schemas/Money' }
+        description: { type: string }
+    ReserveCommand:
+      type: object
+      required: [reservationId, money, transactionId]
+      properties:
+        reservationId: { type: string, format: uuid }
+        transactionId: { type: string, format: uuid }
+        money: { $ref: '#/components/schemas/Money' }
+    Account:
+      type: object
+      required: [id, customerId, accountType, status, balance, currency, version, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        customerId: { type: string, format: uuid }
+        accountType: { type: string, enum: [CHECKING, SAVINGS] }
+        status: { type: string, enum: [ACTIVE, FROZEN, CLOSED] }
+        balance: { type: integer, format: int64 }
+        availableBalance: { type: integer, format: int64 }
+        currency: { type: string }
+        nickname: { type: string }
+        version: { type: integer, description: 'Aggregate version (event count)' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    DomainEvent:
+      type: object
+      required: [eventId, eventType, aggregateId, sequence, occurredAt, payload]
+      properties:
+        eventId: { type: string, format: uuid }
+        eventType:
+          type: string
+          enum: [AccountOpened, Deposited, Withdrawn, Frozen, Unfrozen, Closed, FundsReserved, ReservationCommitted, ReservationReleased]
+        aggregateId: { type: string, format: uuid }
+        sequence: { type: integer }
+        occurredAt: { type: string, format: date-time }
+        payload: { type: object }
+        metadata: { type: object }

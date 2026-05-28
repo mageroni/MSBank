@@ -1,0 +1,52 @@
+apiVersion: v2
+name: microservice-bank
+description: Umbrella Helm chart for the Microservice Bank platform (AKS-ready, Kubernetes 1.28+).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.28.0-0"
+keywords:
+  - microservices
+  - banking
+  - aks
+  - azure
+maintainers:
+  - name: Microservice Bank Platform Team
+dependencies:
+  - name: api-gateway
+    version: 0.1.0
+    repository: "file://../api-gateway"
+    condition: api-gateway.enabled
+  - name: auth-service
+    version: 0.1.0
+    repository: "file://../auth-service"
+    condition: auth-service.enabled
+  - name: accounts-service
+    version: 0.1.0
+    repository: "file://../accounts-service"
+    condition: accounts-service.enabled
+  - name: transactions-service
+    version: 0.1.0
+    repository: "file://../transactions-service"
+    condition: transactions-service.enabled
+  - name: notifications-service
+    version: 0.1.0
+    repository: "file://../notifications-service"
+    condition: notifications-service.enabled
+  - name: web-portal
+    version: 0.1.0
+    repository: "file://../web-portal"
+    condition: web-portal.enabled
+  # Optional in-cluster data plane (only for local/dev clusters).
+  - name: postgresql
+    version: "15.5.20"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+  - name: kafka
+    version: "31.0.0"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: kafka.enabled
+  - name: redis
+    version: "20.1.0"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled

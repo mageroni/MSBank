@@ -1,0 +1,113 @@
+openapi: 3.1.0
+info:
+  title: Transactions Service API
+  version: 1.0.0
+  description: |
+    Cross-account money movement with Saga orchestration.
+    A transfer progresses through: PENDING -> RESERVED -> DEBITED -> CREDITED -> COMPLETED
+    with compensating actions on failure. All amounts in minor units.
+servers:
+  - url: http://transactions-service:8083
+paths:
+  /healthz: { get: { responses: { '200': { description: OK } } } }
+  /readyz:  { get: { responses: { '200': { description: Ready } } } }
+  /api/v1/transfers:
+    post:
+      summary: Initiate a transfer (saga)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TransferRequest' }
+      responses:
+        '202':
+          description: Saga started
+          content: { application/json: { schema: { $ref: '#/components/schemas/Transfer' } } }
+        '422': { description: Validation/business error }
+    get:
+      summary: List transfers for the authenticated customer
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query, name: accountId, schema: { type: string, format: uuid }
+        - in: query, name: status, schema: { $ref: '#/components/schemas/TransferStatus' }
+        - in: query, name: from, schema: { type: string, format: date-time }
+        - in: query, name: to, schema: { type: string, format: date-time }
+        - in: query, name: limit, schema: { type: integer, default: 50, maximum: 200 }
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Transfer' }
+  /api/v1/transfers/{transferId}:
+    get:
+      summary: Get transfer by id
+      security: [{ bearerAuth: [] }]
+      parameters: [{ in: path, name: transferId, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: Transfer
+          content: { application/json: { schema: { $ref: '#/components/schemas/Transfer' } } }
+        '404': { description: Not found }
+  /api/v1/transfers/{transferId}/saga:
+    get:
+      summary: Get saga state log (audit)
+      security: [{ bearerAuth: [] }]
+      parameters: [{ in: path, name: transferId, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: Saga steps
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SagaStep' }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    TransferRequest:
+      type: object
+      required: [sourceAccountId, destinationAccountId, amount, currency]
+      properties:
+        sourceAccountId: { type: string, format: uuid }
+        destinationAccountId: { type: string, format: uuid }
+        amount: { type: integer, format: int64 }
+        currency: { type: string }
+        reference: { type: string, maxLength: 140 }
+    Transfer:
+      type: object
+      required: [id, sourceAccountId, destinationAccountId, amount, currency, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        idempotencyKey: { type: string, format: uuid }
+        sourceAccountId: { type: string, format: uuid }
+        destinationAccountId: { type: string, format: uuid }
+        amount: { type: integer, format: int64 }
+        currency: { type: string }
+        reference: { type: string }
+        status: { $ref: '#/components/schemas/TransferStatus' }
+        failureReason: { type: string }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+    TransferStatus:
+      type: string
+      enum: [PENDING, RESERVED, DEBITED, CREDITED, COMPLETED, FAILED, COMPENSATING, COMPENSATED]
+    SagaStep:
+      type: object
+      required: [step, status, occurredAt]
+      properties:
+        step:
+          type: string
+          enum: [RESERVE_SOURCE, DEBIT_SOURCE, CREDIT_DESTINATION, RELEASE_RESERVATION, REVERSE_DEBIT, EMIT_NOTIFICATION]
+        status: { type: string, enum: [STARTED, SUCCEEDED, FAILED, COMPENSATED] }
+        occurredAt: { type: string, format: date-time }
+        details: { type: object }

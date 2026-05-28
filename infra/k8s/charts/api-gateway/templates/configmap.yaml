@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "svc.fullname" . }}-env
+  namespace: {{ include "svc.namespace" . }}
+  labels:
+    {{- include "svc.labels" . | nindent 4 }}
+data:
+  LOG_LEVEL: {{ .Values.logLevel | default "info" | quote }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.global.otel.endpoint | quote }}
+  OTEL_SERVICE_NAME: {{ .Chart.Name | quote }}
+  OTEL_RESOURCE_ATTRIBUTES: {{ printf "service.namespace=%s,service.name=%s" .Values.global.otel.serviceNamespace .Chart.Name | quote }}
+  # Kafka / Event Hubs
+  KAFKA_BOOTSTRAP_SERVERS: {{ .Values.global.kafka.bootstrapServers | quote }}
+  KAFKA_SECURITY_PROTOCOL: {{ .Values.global.kafka.securityProtocol | quote }}
+  KAFKA_SASL_MECHANISM: {{ .Values.global.kafka.saslMechanism | quote }}
+  KAFKA_SASL_USERNAME: {{ .Values.global.kafka.saslUsername | quote }}
+  # Auth / JWT
+  JWT_ISSUER: {{ .Values.global.auth.issuer | quote }}
+  JWT_AUDIENCE: {{ .Values.global.auth.audience | quote }}
+  JWT_ACCESS_TTL_SECONDS: {{ .Values.global.auth.accessTtlSeconds | quote }}
+  JWT_REFRESH_TTL_SECONDS: {{ .Values.global.auth.refreshTtlSeconds | quote }}
+  JWT_PRIVATE_KEY_PATH: "/etc/msbank/keys/jwt_private.pem"
+  JWT_PUBLIC_KEY_PATH: "/etc/msbank/keys/jwt_public.pem"
+  # Service URLs
+  AUTH_SERVICE_URL: {{ printf "http://%s-auth-service.%s.svc.cluster.local:8081" .Release.Name (include "svc.namespace" .) | quote }}
+  ACCOUNTS_SERVICE_URL: {{ printf "http://%s-accounts-service.%s.svc.cluster.local:8082" .Release.Name (include "svc.namespace" .) | quote }}
+  TRANSACTIONS_SERVICE_URL: {{ printf "http://%s-transactions-service.%s.svc.cluster.local:8083" .Release.Name (include "svc.namespace" .) | quote }}
+  NOTIFICATIONS_SERVICE_URL: {{ printf "http://%s-notifications-service.%s.svc.cluster.local:8084" .Release.Name (include "svc.namespace" .) | quote }}
+  # Postgres / Redis (per-service DB URLs are built into env from secret password).
+  POSTGRES_HOST: {{ .Values.global.postgres.host | quote }}
+  POSTGRES_PORT: {{ .Values.global.postgres.port | quote }}
+  POSTGRES_USER: {{ .Values.global.postgres.user | quote }}
+  POSTGRES_SSLMODE: {{ .Values.global.postgres.sslMode | quote }}
+  REDIS_HOST: {{ .Values.global.redis.host | quote }}
+  REDIS_PORT: {{ .Values.global.redis.port | quote }}
+  REDIS_TLS: {{ .Values.global.redis.tls | quote }}
+  {{- with .Values.extraEnv }}
+  {{- range $k, $v := . }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}
+  {{- end }}

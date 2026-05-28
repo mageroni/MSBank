@@ -1,0 +1,9 @@
+{{ .Chart.Name }} deployed as part of microservice-bank.
+
+  Service:       {{ include "svc.fullname" . }}.{{ include "svc.namespace" . }}.svc.cluster.local:{{ .Values.service.port }}
+  Replicas:      {{ .Values.replicaCount }}
+  Image:         {{ include "svc.image" . }}
+  Workload ID:   {{ .Values.workloadIdentityClientId }}
+
+Verify rollout:
+  kubectl -n {{ include "svc.namespace" . }} rollout status deploy/{{ include "svc.fullname" . }}

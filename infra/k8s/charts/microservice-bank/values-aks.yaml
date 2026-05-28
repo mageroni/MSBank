@@ -1,0 +1,51 @@
+# =============================================================================
+# AKS overrides — apply on top of values.yaml when deploying to AKS.
+# =============================================================================
+global:
+  ingress:
+    enabled: true
+    # Switch to "azure-application-gateway" for AGIC, leave "nginx" for AKS+ingress-nginx.
+    className: nginx
+    annotations:
+      # AGIC example (uncomment if using Application Gateway Ingress Controller):
+      # kubernetes.io/ingress.class: azure-application-gateway
+      # appgw.ingress.kubernetes.io/ssl-redirect: "true"
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+
+  workloadIdentity:
+    enabled: true
+
+  # Secrets Store CSI driver — Azure provider parameters.
+  secretsStoreCSI:
+    provider: azure
+    # When using workload identity, SecretProviderClass uses clientID + tenantId.
+    useWorkloadIdentity: true
+
+  # Pin to the AKS node selector / tolerations if needed.
+  nodeSelector:
+    kubernetes.io/os: linux
+
+  # Increase ulimit for Java services on AKS if you use cgroupsv2.
+  pod:
+    topologySpread:
+      enabled: true
+      maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+
+api-gateway:
+  replicaCount: 3
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 12
+auth-service:
+  replicaCount: 2
+accounts-service:
+  replicaCount: 2
+transactions-service:
+  replicaCount: 3
+notifications-service:
+  replicaCount: 2
+web-portal:
+  replicaCount: 2

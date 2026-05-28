@@ -1,0 +1,14 @@
+{% extends "email/_base.html" %}
+{% block content %}
+  <h2>Transfer could not be completed</h2>
+  <p>
+    Your transfer of <strong>{{ amount }}</strong> from
+    <code>{{ source_account }}</code> to <code>{{ destination_account }}</code>
+    did not complete.
+  </p>
+  {% if failure_reason %}
+    <p><strong>Reason:</strong> {{ failure_reason }}</p>
+  {% endif %}
+  <p>No funds were moved. You can try again or contact support.</p>
+  <p>Reference: <code>{{ transfer_id }}</code></p>
+{% endblock %}

@@ -1,0 +1,7 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+auth:
+  outbox:
+    poll-interval-ms: 200

@@ -1,0 +1,5 @@
+# Root compose file — delegates to the full stack under infra/docker.
+# Requires Docker Compose v2.20+ for the `include` directive.
+include:
+  - path: infra/docker/docker-compose.yml
+    env_file: .env

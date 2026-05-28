@@ -1,0 +1,47 @@
+{{- if and .Values.ingress.enabled .Values.global.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "svc.fullname" . }}
+  namespace: {{ include "svc.namespace" . }}
+  labels:
+    {{- include "svc.labels" . | nindent 4 }}
+  annotations:
+    {{- if and .Values.global.ingress.tls.enabled .Values.global.ingress.tls.clusterIssuer }}
+    cert-manager.io/cluster-issuer: {{ .Values.global.ingress.tls.clusterIssuer | quote }}
+    {{- end }}
+    {{- with .Values.global.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.global.ingress.className }}
+  {{- if .Values.global.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.global.domain | quote }}
+        - {{ printf "app.%s" .Values.global.domain | quote }}
+      secretName: {{ printf "%s-tls" (include "svc.fullname" .) | quote }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.global.domain | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "svc.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+    - host: {{ printf "app.%s" .Values.global.domain | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                # web-portal service name in the same release
+                name: {{ printf "%s-web-portal" .Release.Name | quote }}
+                port:
+                  number: 3000
+{{- end -}}

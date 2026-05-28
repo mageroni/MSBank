@@ -1,0 +1,28 @@
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+  kafka:
+    bootstrap-servers: ${kafka.bootstrap-servers:localhost:9092}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://test.local
+          jwk-set-uri: https://test.local/.well-known/jwks.json
+
+accounts:
+  internal-token: test-internal
+  projection:
+    poll-interval-ms: 100
+    batch-size: 200
+  outbox:
+    poll-interval-ms: 100
+    batch-size: 100
+  jwt:
+    audience: msbank
+
+logging:
+  level:
+    com.msbank: INFO
+    org.springframework: WARN

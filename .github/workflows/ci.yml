@@ -1,0 +1,237 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Detect which paths changed so we only build affected services.
+  # ---------------------------------------------------------------------------
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      auth: ${{ steps.filter.outputs.auth }}
+      accounts: ${{ steps.filter.outputs.accounts }}
+      transactions: ${{ steps.filter.outputs.transactions }}
+      notifications: ${{ steps.filter.outputs.notifications }}
+      gateway: ${{ steps.filter.outputs.gateway }}
+      web: ${{ steps.filter.outputs.web }}
+      infra: ${{ steps.filter.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            auth:          ['services/auth-service/**', 'libs/contracts/**']
+            accounts:      ['services/accounts-service/**', 'libs/contracts/**']
+            transactions:  ['services/transactions-service/**', 'libs/contracts/**']
+            notifications: ['services/notifications-service/**', 'libs/contracts/**']
+            gateway:       ['services/api-gateway/**', 'libs/contracts/**']
+            web:           ['web-portal/**']
+            infra:         ['infra/**', '.github/workflows/**']
+
+  # ---------------------------------------------------------------------------
+  # Java services (auth, accounts)
+  # ---------------------------------------------------------------------------
+  java:
+    name: Java • ${{ matrix.service }}
+    needs: changes
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: auth-service
+            changed: ${{ needs.changes.outputs.auth }}
+          - service: accounts-service
+            changed: ${{ needs.changes.outputs.accounts }}
+    if: ${{ needs.changes.outputs.auth == 'true' || needs.changes.outputs.accounts == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Build & test
+        if: matrix.changed == 'true'
+        working-directory: services/${{ matrix.service }}
+        run: ./mvnw -B -ntp verify
+      - name: Upload surefire reports
+        if: matrix.changed == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-${{ matrix.service }}
+          path: services/${{ matrix.service }}/target/surefire-reports
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Go service (transactions)
+  # ---------------------------------------------------------------------------
+  go:
+    name: Go • transactions-service
+    needs: changes
+    if: needs.changes.outputs.transactions == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: services/transactions-service/go.sum
+      - name: Vet
+        working-directory: services/transactions-service
+        run: go vet ./...
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          working-directory: services/transactions-service
+          version: v1.59
+      - name: Test
+        working-directory: services/transactions-service
+        run: go test -race -short -coverprofile=coverage.out ./...
+
+  # ---------------------------------------------------------------------------
+  # Python service (notifications)
+  # ---------------------------------------------------------------------------
+  python:
+    name: Python • notifications-service
+    needs: changes
+    if: needs.changes.outputs.notifications == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: services/notifications-service/requirements.txt
+      - name: Install
+        working-directory: services/notifications-service
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt
+          pip install ruff mypy pytest pytest-asyncio
+      - name: Lint
+        working-directory: services/notifications-service
+        run: ruff check .
+      - name: Type check
+        working-directory: services/notifications-service
+        run: mypy app
+      - name: Test
+        working-directory: services/notifications-service
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: pytest -q --maxfail=1
+
+  # ---------------------------------------------------------------------------
+  # Node services (gateway, web)
+  # ---------------------------------------------------------------------------
+  node:
+    name: Node • ${{ matrix.workspace }}
+    needs: changes
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - workspace: services/api-gateway
+            changed: ${{ needs.changes.outputs.gateway }}
+          - workspace: web-portal
+            changed: ${{ needs.changes.outputs.web }}
+    if: ${{ needs.changes.outputs.gateway == 'true' || needs.changes.outputs.web == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: ${{ matrix.workspace }}/package-lock.json
+      - name: Install
+        if: matrix.changed == 'true'
+        working-directory: ${{ matrix.workspace }}
+        run: npm ci
+      - name: Lint
+        if: matrix.changed == 'true'
+        working-directory: ${{ matrix.workspace }}
+        run: npm run lint --if-present
+      - name: Type check
+        if: matrix.changed == 'true'
+        working-directory: ${{ matrix.workspace }}
+        run: npm run typecheck --if-present
+      - name: Test
+        if: matrix.changed == 'true'
+        working-directory: ${{ matrix.workspace }}
+        run: npm test --if-present -- --run
+      - name: Build
+        if: matrix.changed == 'true'
+        working-directory: ${{ matrix.workspace }}
+        run: npm run build --if-present
+
+  # ---------------------------------------------------------------------------
+  # Contracts: lint OpenAPI + AsyncAPI
+  # ---------------------------------------------------------------------------
+  contracts:
+    name: Contracts lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Install linters
+        run: |
+          npm install -g @redocly/cli@1.16.0 @asyncapi/cli@2.5.0
+      - name: Lint OpenAPI
+        run: |
+          for f in libs/contracts/openapi/*.yaml; do
+            echo "==> $f"
+            redocly lint "$f" || true
+          done
+      - name: Lint AsyncAPI
+        run: |
+          for f in libs/contracts/asyncapi/*.yaml; do
+            echo "==> $f"
+            asyncapi validate "$f"
+          done
+
+  # ---------------------------------------------------------------------------
+  # Infra validation
+  # ---------------------------------------------------------------------------
+  infra:
+    name: Infra validate
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compose config
+        run: docker compose -f infra/docker/docker-compose.yml config -q
+      - uses: azure/setup-helm@v4
+        with: { version: 'v3.15.0' }
+      - name: Helm lint
+        run: |
+          for chart in infra/k8s/charts/*/; do
+            helm lint "$chart" || exit 1
+          done
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: '1.7.5' }
+      - name: Terraform fmt & validate
+        working-directory: infra/terraform
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false
+          terraform validate

@@ -1,0 +1,63 @@
+name: Deploy to AKS
+
+# Manual deploy. Assumes images are already published to ACR by a separate
+# workflow (or mirrored from GHCR). Uses OIDC federated credentials for Azure.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [dev, staging, prod]
+        default: dev
+      image_tag:
+        description: Image tag to deploy (e.g., sha-abc1234 or v1.2.3)
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      AZURE_RESOURCE_GROUP: msbank-${{ inputs.environment }}-rg
+      AKS_NAME: msbank-${{ inputs.environment }}-aks
+      NAMESPACE: msbank
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get AKS credentials
+        uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ env.AZURE_RESOURCE_GROUP }}
+          cluster-name: ${{ env.AKS_NAME }}
+          use-kubelogin: true
+
+      - uses: azure/setup-helm@v4
+        with: { version: 'v3.15.0' }
+
+      - name: Helm upgrade
+        run: |
+          helm upgrade --install msbank infra/k8s/charts/microservice-bank \
+            --namespace ${{ env.NAMESPACE }} --create-namespace \
+            -f infra/k8s/charts/microservice-bank/values-aks.yaml \
+            --set global.image.tag=${{ inputs.image_tag }} \
+            --set global.environment=${{ inputs.environment }} \
+            --wait --timeout 10m
+
+      - name: Smoke check
+        run: |
+          kubectl -n ${{ env.NAMESPACE }} rollout status deploy -l app.kubernetes.io/part-of=msbank --timeout=5m
+          kubectl -n ${{ env.NAMESPACE }} get pods

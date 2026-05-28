@@ -1,0 +1,80 @@
+{{- if .Values.global.networkPolicy.defaultDeny -}}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "msbank.fullname" . }}-default-deny
+  namespace: {{ include "msbank.namespace" . }}
+  labels:
+    {{- include "msbank.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "msbank.fullname" . }}-allow-dns
+  namespace: {{ include "msbank.namespace" . }}
+  labels:
+    {{- include "msbank.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "msbank.fullname" . }}-allow-egress-managed
+  namespace: {{ include "msbank.namespace" . }}
+  labels:
+    {{- include "msbank.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        {{- range .Values.global.networkPolicy.allowedEgressCIDRs }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
+      ports:
+        {{- range .Values.global.networkPolicy.allowedEgressPorts }}
+        - port: {{ . }}
+          protocol: TCP
+        {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "msbank.fullname" . }}-allow-intra-ns
+  namespace: {{ include "msbank.namespace" . }}
+  labels:
+    {{- include "msbank.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector: {}
+  egress:
+    - to:
+        - podSelector: {}
+{{- end -}}

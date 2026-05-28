@@ -1,0 +1,95 @@
+server:
+  port: 8082
+  shutdown: graceful
+  error:
+    include-message: always
+
+spring:
+  application:
+    name: accounts-service
+  datasource:
+    url: ${ACCOUNTS_DB_URL:jdbc:postgresql://localhost:5432/accounts}
+    username: ${POSTGRES_USER:msbank}
+    password: ${POSTGRES_PASSWORD:msbank_dev_only}
+    hikari:
+      maximum-pool-size: 10
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER:https://auth.msbank.local}
+          jwk-set-uri: ${JWT_JWKS_URI:${JWT_ISSUER:https://auth.msbank.local}/.well-known/jwks.json}
+          audiences: ${JWT_AUDIENCE:msbank}
+
+accounts:
+  internal-token: ${INTERNAL_TOKEN:dev-internal-token}
+  kafka:
+    topic: account-events
+  projection:
+    poll-interval-ms: 250
+    batch-size: 200
+  outbox:
+    poll-interval-ms: 500
+    batch-size: 100
+  snapshot:
+    interval: 50
+  jwt:
+    audience: ${JWT_AUDIENCE:msbank}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      outboxPublisher:
+        sliding-window-size: 20
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+  retry:
+    instances:
+      outboxPublisher:
+        max-attempts: 5
+        wait-duration: 500ms
+        exponential-backoff-multiplier: 2
+  bulkhead:
+    instances:
+      reservations:
+        max-concurrent-calls: 20
+        max-wait-duration: 100ms
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
+    com.msbank: DEBUG

@@ -1,0 +1,470 @@
+# =============================================================================
+# microservice-bank — local stack (Docker Compose)
+# Run from repo root:  docker compose up -d
+# Or directly:         docker compose -f infra/docker/docker-compose.yml up -d
+# =============================================================================
+
+# ---- YAML anchors -----------------------------------------------------------
+x-postgres-base: &postgres-base
+  image: postgres:16-alpine
+  restart: unless-stopped
+  environment:
+    POSTGRES_USER: ${POSTGRES_USER:-msbank}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-msbank_dev_only}
+  networks: [msbank]
+
+x-app-base: &app-base
+  env_file: ../../.env
+  restart: unless-stopped
+  networks: [msbank]
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-otel-env: &otel-env
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+
+networks:
+  msbank:
+    name: msbank
+    driver: bridge
+
+volumes:
+  pg-auth-data:
+  pg-accounts-data:
+  pg-transactions-data:
+  pg-notifications-data:
+  redis-data:
+  redpanda-data:
+  prometheus-data:
+  grafana-data:
+  elasticsearch-data:
+
+services:
+  # ---------------------------------------------------------------------------
+  # Messaging — Redpanda (Kafka API compatible) + Console UI
+  # ---------------------------------------------------------------------------
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: redpanda
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --overprovisioned
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:19092
+      - --advertise-kafka-addr=INTERNAL://redpanda:9092,EXTERNAL://localhost:19092
+      - --pandaproxy-addr=0.0.0.0:8082
+      - --advertise-pandaproxy-addr=localhost:18082
+      - --schema-registry-addr=0.0.0.0:8081
+      - --rpc-addr=0.0.0.0:33145
+      - --advertise-rpc-addr=redpanda:33145
+      - --mode=dev-container
+    ports:
+      - "19092:19092"   # Kafka API (host)
+      - "18082:18082"   # Pandaproxy (host)
+      - "18081:8081"    # Schema Registry (host)
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [msbank]
+
+  # Web UI for Redpanda/Kafka inspection
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:latest
+    container_name: redpanda-console
+    restart: unless-stopped
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      KAFKA_SCHEMAREGISTRY_ENABLED: "true"
+      KAFKA_SCHEMAREGISTRY_URLS: http://redpanda:8081
+    ports:
+      - "8088:8080"
+    networks: [msbank]
+
+  # ---------------------------------------------------------------------------
+  # Databases — one Postgres per service (data isolation)
+  # ---------------------------------------------------------------------------
+  postgres-auth:
+    <<: *postgres-base
+    container_name: postgres-auth
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-msbank}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-msbank_dev_only}
+      POSTGRES_DB: auth
+    ports: ["5433:5432"]
+    volumes:
+      - pg-auth-data:/var/lib/postgresql/data
+      - ./postgres/auth/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-msbank} -d auth"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  postgres-accounts:
+    <<: *postgres-base
+    container_name: postgres-accounts
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-msbank}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-msbank_dev_only}
+      POSTGRES_DB: accounts
+    ports: ["5434:5432"]
+    volumes:
+      - pg-accounts-data:/var/lib/postgresql/data
+      - ./postgres/accounts/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-msbank} -d accounts"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  postgres-transactions:
+    <<: *postgres-base
+    container_name: postgres-transactions
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-msbank}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-msbank_dev_only}
+      POSTGRES_DB: transactions
+    ports: ["5435:5432"]
+    volumes:
+      - pg-transactions-data:/var/lib/postgresql/data
+      - ./postgres/transactions/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-msbank} -d transactions"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  postgres-notifications:
+    <<: *postgres-base
+    container_name: postgres-notifications
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-msbank}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-msbank_dev_only}
+      POSTGRES_DB: notifications
+    ports: ["5436:5432"]
+    volumes:
+      - pg-notifications-data:/var/lib/postgresql/data
+      - ./postgres/notifications/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-msbank} -d notifications"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # Cache — Redis (sessions, rate limits, refresh-token store)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["6380:6379"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    networks: [msbank]
+
+  # ---------------------------------------------------------------------------
+  # MailHog — dev SMTP sink + web UI for notification emails
+  # ---------------------------------------------------------------------------
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
+    networks: [msbank]
+
+  # ---------------------------------------------------------------------------
+  # Observability — OpenTelemetry Collector (traces/metrics/logs hub)
+  # ---------------------------------------------------------------------------
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otel/otel-collector-config.yaml"]
+    volumes:
+      - ../observability/otel/otel-collector-config.yaml:/etc/otel/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # Prometheus exporter (scrape target)
+    depends_on:
+      jaeger:
+        condition: service_started
+      elasticsearch:
+        condition: service_healthy
+    networks: [msbank]
+
+  # Jaeger all-in-one — distributed trace storage & UI
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    container_name: jaeger
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"  # UI
+      - "14250:14250"  # gRPC (collector ingest)
+    networks: [msbank]
+
+  # Prometheus — metric storage + query
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    volumes:
+      - ../observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports: ["9090:9090"]
+    networks: [msbank]
+
+  # Grafana — dashboards (provisioned)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ../observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports: ["3001:3000"]
+    depends_on:
+      - prometheus
+      - jaeger
+      - elasticsearch
+    networks: [msbank]
+
+  # Elasticsearch — log/trace search backend
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: elasticsearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms1g -Xmx1g"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    ports: ["9200:9200"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks: [msbank]
+
+  # Kibana — log exploration UI
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.4
+    container_name: kibana
+    restart: unless-stopped
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    ports: ["5601:5601"]
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks: [msbank]
+
+  # Filebeat — tail container logs via Docker autodiscover, ship to ES
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.13.4
+    container_name: filebeat
+    restart: unless-stopped
+    user: root
+    command: ["filebeat", "-e", "--strict.perms=false"]
+    volumes:
+      - ../observability/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks: [msbank]
+
+  # ---------------------------------------------------------------------------
+  # Application services
+  # ---------------------------------------------------------------------------
+  # auth-service — issues/refreshes JWTs (Spring Boot)
+  auth-service:
+    <<: *app-base
+    build:
+      context: ../../services/auth-service
+    container_name: auth-service
+    environment:
+      <<: *otel-env
+      OTEL_RESOURCE_ATTRIBUTES: service.name=auth-service,service.version=1.0.0,deployment.environment=local
+    ports: ["8081:8081"]
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health | grep -q UP || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
+
+  # accounts-service — customer accounts & balances (Spring Boot)
+  accounts-service:
+    <<: *app-base
+    build:
+      context: ../../services/accounts-service
+    container_name: accounts-service
+    environment:
+      <<: *otel-env
+      OTEL_RESOURCE_ATTRIBUTES: service.name=accounts-service,service.version=1.0.0,deployment.environment=local
+      JWT_JWKS_URI: http://auth-service:8081/.well-known/jwks.json
+    ports: ["8082:8082"]
+    depends_on:
+      postgres-accounts:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/actuator/health | grep -q UP || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
+
+  # transactions-service — transfer saga orchestrator (Go)
+  transactions-service:
+    <<: *app-base
+    build:
+      context: ../../services/transactions-service
+    container_name: transactions-service
+    environment:
+      <<: *otel-env
+      OTEL_RESOURCE_ATTRIBUTES: service.name=transactions-service,service.version=1.0.0,deployment.environment=local
+      JWT_JWKS_URI: http://auth-service:8081/.well-known/jwks.json
+    ports: ["8083:8083"]
+    depends_on:
+      postgres-transactions:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # notifications-service — email dispatch via MailHog (Python/FastAPI)
+  notifications-service:
+    <<: *app-base
+    build:
+      context: ../../services/notifications-service
+    container_name: notifications-service
+    environment:
+      <<: *otel-env
+      OTEL_RESOURCE_ATTRIBUTES: service.name=notifications-service,service.version=1.0.0,deployment.environment=local
+      JWT_JWKS_URI: http://auth-service:8081/.well-known/jwks.json
+    ports: ["8084:8084"]
+    depends_on:
+      postgres-notifications:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8084/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # api-gateway — edge router, JWT validation, rate limiting (Node/Express)
+  api-gateway:
+    <<: *app-base
+    build:
+      context: ../../services/api-gateway
+    container_name: api-gateway
+    environment:
+      <<: *otel-env
+      OTEL_RESOURCE_ATTRIBUTES: service.name=api-gateway,service.version=1.0.0,deployment.environment=local
+      JWT_JWKS_URI: http://auth-service:8081/.well-known/jwks.json
+    ports: ["8080:8080"]
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      accounts-service:
+        condition: service_healthy
+      transactions-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # web-portal — customer-facing Next.js UI
+  web-portal:
+    <<: *app-base
+    build:
+      context: ../../web-portal
+    container_name: web-portal
+    environment:
+      <<: *otel-env
+      OTEL_RESOURCE_ATTRIBUTES: service.name=web-portal,service.version=1.0.0,deployment.environment=local
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+      API_BASE_URL: http://api-gateway:8080
+    ports: ["3000:3000"]
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s

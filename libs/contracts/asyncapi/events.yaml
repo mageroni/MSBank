@@ -1,0 +1,163 @@
+asyncapi: 2.6.0
+info:
+  title: Microservice Bank — Domain Events
+  version: 1.0.0
+  description: |
+    Event-driven contracts for inter-service communication. The local broker is
+    Redpanda; the production broker is Azure Event Hubs (Kafka-compatible).
+    All events follow the CloudEvents-inspired envelope below.
+
+servers:
+  local:
+    url: redpanda:9092
+    protocol: kafka
+  azure:
+    url: '{namespace}.servicebus.windows.net:9093'
+    protocol: kafka-secure
+    variables:
+      namespace: { default: msbank-eventhubs }
+
+defaultContentType: application/json
+
+channels:
+  user-events:
+    description: Lifecycle events for users (produced by auth-service).
+    publish:
+      operationId: publishUserEvent
+      message:
+        oneOf:
+          - $ref: '#/components/messages/UserRegistered'
+          - $ref: '#/components/messages/UserLoggedIn'
+          - $ref: '#/components/messages/UserMfaEnabled'
+
+  account-events:
+    description: Domain events from the accounts-service event store (outbox-published).
+    publish:
+      operationId: publishAccountEvent
+      message:
+        oneOf:
+          - $ref: '#/components/messages/AccountOpened'
+          - $ref: '#/components/messages/Deposited'
+          - $ref: '#/components/messages/Withdrawn'
+          - $ref: '#/components/messages/FundsReserved'
+          - $ref: '#/components/messages/ReservationCommitted'
+          - $ref: '#/components/messages/ReservationReleased'
+          - $ref: '#/components/messages/Frozen'
+
+  transaction-events:
+    description: Saga lifecycle events for transfers (produced by transactions-service).
+    publish:
+      operationId: publishTransactionEvent
+      message:
+        oneOf:
+          - $ref: '#/components/messages/TransferInitiated'
+          - $ref: '#/components/messages/TransferCompleted'
+          - $ref: '#/components/messages/TransferFailed'
+          - $ref: '#/components/messages/TransferCompensated'
+
+  notification-events:
+    description: Outbound delivery results (produced by notifications-service).
+    publish:
+      operationId: publishNotificationEvent
+      message:
+        oneOf:
+          - $ref: '#/components/messages/NotificationSent'
+          - $ref: '#/components/messages/NotificationFailed'
+
+components:
+  messages:
+    UserRegistered:        { name: UserRegistered,        payload: { $ref: '#/components/schemas/UserPayload' } }
+    UserLoggedIn:          { name: UserLoggedIn,          payload: { $ref: '#/components/schemas/UserPayload' } }
+    UserMfaEnabled:        { name: UserMfaEnabled,        payload: { $ref: '#/components/schemas/UserPayload' } }
+    AccountOpened:         { name: AccountOpened,         payload: { $ref: '#/components/schemas/AccountPayload' } }
+    Deposited:             { name: Deposited,             payload: { $ref: '#/components/schemas/MoneyPayload' } }
+    Withdrawn:             { name: Withdrawn,             payload: { $ref: '#/components/schemas/MoneyPayload' } }
+    FundsReserved:         { name: FundsReserved,         payload: { $ref: '#/components/schemas/ReservationPayload' } }
+    ReservationCommitted:  { name: ReservationCommitted,  payload: { $ref: '#/components/schemas/ReservationPayload' } }
+    ReservationReleased:   { name: ReservationReleased,   payload: { $ref: '#/components/schemas/ReservationPayload' } }
+    Frozen:                { name: Frozen,                payload: { $ref: '#/components/schemas/AccountPayload' } }
+    TransferInitiated:     { name: TransferInitiated,     payload: { $ref: '#/components/schemas/TransferPayload' } }
+    TransferCompleted:     { name: TransferCompleted,     payload: { $ref: '#/components/schemas/TransferPayload' } }
+    TransferFailed:        { name: TransferFailed,        payload: { $ref: '#/components/schemas/TransferPayload' } }
+    TransferCompensated:   { name: TransferCompensated,   payload: { $ref: '#/components/schemas/TransferPayload' } }
+    NotificationSent:      { name: NotificationSent,      payload: { $ref: '#/components/schemas/NotificationPayload' } }
+    NotificationFailed:    { name: NotificationFailed,    payload: { $ref: '#/components/schemas/NotificationPayload' } }
+
+  schemas:
+    Envelope:
+      type: object
+      required: [eventId, eventType, eventVersion, occurredAt, source, data]
+      properties:
+        eventId: { type: string, format: uuid }
+        eventType: { type: string }
+        eventVersion: { type: integer, default: 1 }
+        occurredAt: { type: string, format: date-time }
+        correlationId: { type: string }
+        causationId: { type: string }
+        source: { type: string, description: 'Producing service name' }
+        data: { type: object }
+
+    UserPayload:
+      type: object
+      required: [userId, email]
+      properties:
+        userId: { type: string, format: uuid }
+        email: { type: string, format: email }
+        firstName: { type: string }
+        lastName: { type: string }
+
+    AccountPayload:
+      type: object
+      required: [accountId, customerId]
+      properties:
+        accountId: { type: string, format: uuid }
+        customerId: { type: string, format: uuid }
+        accountType: { type: string, enum: [CHECKING, SAVINGS] }
+        currency: { type: string }
+        status: { type: string, enum: [ACTIVE, FROZEN, CLOSED] }
+
+    MoneyPayload:
+      type: object
+      required: [accountId, amount, currency, balance]
+      properties:
+        accountId: { type: string, format: uuid }
+        amount: { type: integer, format: int64 }
+        currency: { type: string }
+        balance: { type: integer, format: int64 }
+        idempotencyKey: { type: string, format: uuid }
+        description: { type: string }
+
+    ReservationPayload:
+      type: object
+      required: [accountId, reservationId, transactionId, amount, currency]
+      properties:
+        accountId: { type: string, format: uuid }
+        reservationId: { type: string, format: uuid }
+        transactionId: { type: string, format: uuid }
+        amount: { type: integer, format: int64 }
+        currency: { type: string }
+
+    TransferPayload:
+      type: object
+      required: [transferId, sourceAccountId, destinationAccountId, amount, currency, status]
+      properties:
+        transferId: { type: string, format: uuid }
+        sourceAccountId: { type: string, format: uuid }
+        destinationAccountId: { type: string, format: uuid }
+        amount: { type: integer, format: int64 }
+        currency: { type: string }
+        status: { type: string, enum: [PENDING, COMPLETED, FAILED, COMPENSATED] }
+        failureReason: { type: string }
+
+    NotificationPayload:
+      type: object
+      required: [notificationId, channel, status]
+      properties:
+        notificationId: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        channel: { type: string, enum: [EMAIL, SMS, WEBHOOK] }
+        to: { type: string }
+        templateKey: { type: string }
+        status: { type: string, enum: [SENT, FAILED] }
+        attempts: { type: integer }
+        error: { type: string }

@@ -1,0 +1,92 @@
+# =============================================================================
+# Local (kind / minikube) overrides
+# =============================================================================
+global:
+  domain: msbank.local
+  image:
+    registry: localhost:5001
+    pullPolicy: IfNotPresent
+    pullSecrets: []
+  ingress:
+    enabled: true
+    className: nginx
+    tls:
+      enabled: false
+  workloadIdentity:
+    enabled: false
+  # Disable Azure CSI driver locally; sub-charts mount a plain Secret instead.
+  keyVault:
+    name: ""
+  networkPolicy:
+    defaultDeny: false
+  kafka:
+    bootstrapServers: "msbank-kafka.msbank.svc.cluster.local:9092"
+    securityProtocol: PLAINTEXT
+    saslMechanism: ""
+    saslUsername: ""
+  postgres:
+    host: "msbank-postgresql.msbank.svc.cluster.local"
+    port: 5432
+    sslMode: disable
+    user: msbank
+  redis:
+    host: "msbank-redis-master.msbank.svc.cluster.local"
+    port: 6379
+    tls: false
+
+# In-cluster data-plane sub-charts
+postgresql:
+  enabled: true
+  auth:
+    username: msbank
+    password: msbank_dev_only
+    database: msbank
+  primary:
+    persistence:
+      size: 2Gi
+
+kafka:
+  enabled: true
+  listeners:
+    client:
+      protocol: PLAINTEXT
+  controller:
+    replicaCount: 1
+  broker:
+    replicaCount: 1
+  persistence:
+    size: 2Gi
+
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    persistence:
+      size: 1Gi
+
+api-gateway:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+auth-service:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+accounts-service:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+transactions-service:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+notifications-service:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+web-portal:
+  replicaCount: 1
+  autoscaling:
+    enabled: false

@@ -1,0 +1,5 @@
+resource_group_name  = "rg-tfstate"
+storage_account_name = "sttfstatemsbank"
+container_name       = "tfstate"
+key                  = "msbank/dev.tfstate"
+use_azuread_auth     = true

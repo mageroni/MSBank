@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: 'Inter', system-ui, sans-serif;
+}
+
+html, body { height: 100%; }
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+.dark body {
+  @apply bg-slate-950 text-slate-100;
+}
+
+*:focus-visible {
+  @apply outline-none ring-2 ring-brand-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-950;
+}
+
+.skeleton {
+  @apply animate-pulse rounded bg-slate-200 dark:bg-slate-800;
+}

@@ -1,0 +1,16 @@
+{{- if .Values.global.createNamespace -}}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ include "msbank.namespace" . }}
+  labels:
+    {{- include "msbank.labels" . | nindent 4 }}
+    {{- with .Values.global.podSecurity }}
+    pod-security.kubernetes.io/enforce: {{ .enforce | quote }}
+    pod-security.kubernetes.io/audit: {{ .audit | quote }}
+    pod-security.kubernetes.io/warn: {{ .warn | quote }}
+    {{- end }}
+    {{- if .Values.global.workloadIdentity.enabled }}
+    azure.workload.identity/use: "true"
+    {{- end }}
+{{- end -}}

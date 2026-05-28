@@ -1,0 +1,37 @@
+# Filebeat — Docker autodiscover. Tails container JSON log files and
+# ships them to Elasticsearch as msbank-logs-YYYY.MM.DD.
+
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      hints.enabled: true
+      templates:
+        - condition:
+            contains:
+              docker.container.image: ""
+          config:
+            - type: container
+              paths:
+                - /var/lib/docker/containers/${data.docker.container.id}/*.log
+              processors:
+                - add_docker_metadata: ~
+                - decode_json_fields:
+                    fields: ["message"]
+                    target: ""
+                    overwrite_keys: true
+                    add_error_key: true
+
+processors:
+  - add_host_metadata: ~
+  - add_cloud_metadata: ~
+
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+  index: "msbank-logs-%{+yyyy.MM.dd}"
+
+setup.template.name: "msbank-logs"
+setup.template.pattern: "msbank-logs-*"
+setup.ilm.enabled: false
+
+logging.level: info
+logging.to_files: false
