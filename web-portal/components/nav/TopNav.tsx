@@ -1,7 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Menu, Moon, Sun, LogOut } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { useTheme } from '@/lib/useTheme';
@@ -26,7 +26,7 @@ export function TopNav() {
           >
             <Menu className="h-5 w-5" />
           </button>
-          <Link href="/dashboard" className="flex items-center gap-2">
+          <Link to="/dashboard" className="flex items-center gap-2">
             <Logo className="h-7 w-7" />
             <span className="font-semibold tracking-tight">MS Bank</span>
           </Link>

@@ -1,10 +1,7 @@
-'use client';
-
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -20,8 +17,8 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-export default function LoginPage() {
-  const router = useRouter();
+export function LoginPage() {
+  const navigate = useNavigate();
   const { login } = useAuth();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const { register, handleSubmit, formState } = useForm<FormValues>();
@@ -33,9 +30,10 @@ export default function LoginPage() {
       setSubmitError(parsed.error.issues[0]?.message ?? 'Invalid input');
       return;
     }
+
     try {
       await login(parsed.data.email, parsed.data.password, parsed.data.totpCode);
-      router.replace('/dashboard');
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Login failed');
     }
@@ -74,7 +72,9 @@ export default function LoginPage() {
         </Button>
         <p className="text-center text-sm text-slate-500">
           No account?{' '}
-          <Link href="/register" className="font-medium text-brand-600 hover:underline">Create one</Link>
+          <Link to="/register" className="font-medium text-brand-600 hover:underline">
+            Create one
+          </Link>
         </p>
       </form>
     </Card>

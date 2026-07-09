@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -66,7 +66,10 @@ class NotificationRepository:
                 source_event_id=notification.source_event_id,
                 payload=notification.payload,
             )
-            .on_conflict_do_nothing(index_elements=["source_event_id"])
+            .on_conflict_do_nothing(
+                index_elements=["source_event_id"],
+                index_where=text("source_event_id IS NOT NULL"),
+            )
             .returning(Notification.id)
         )
         result = await self._session.execute(stmt)

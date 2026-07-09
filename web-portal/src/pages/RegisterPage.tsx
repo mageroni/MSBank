@@ -1,10 +1,7 @@
-'use client';
-
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
@@ -21,10 +18,14 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-export default function RegisterPage() {
-  const router = useRouter();
+export function RegisterPage() {
+  const navigate = useNavigate();
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormValues>();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting }
+  } = useForm<FormValues>();
 
   const onSubmit = handleSubmit(async (values) => {
     setSubmitError(null);
@@ -33,6 +34,7 @@ export default function RegisterPage() {
       setSubmitError(parsed.error.issues[0]?.message ?? 'Invalid input');
       return;
     }
+
     try {
       const res = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/auth/register`, {
         method: 'POST',
@@ -43,7 +45,7 @@ export default function RegisterPage() {
         const problem = await res.json().catch(() => ({ title: 'Registration failed' }));
         throw new Error(problem.title ?? 'Registration failed');
       }
-      router.replace('/login');
+      navigate('/login', { replace: true });
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Registration failed');
     }
@@ -73,7 +75,9 @@ export default function RegisterPage() {
         <Button type="submit" isLoading={isSubmitting}>Create account</Button>
         <p className="text-center text-sm text-slate-500">
           Already have an account?{' '}
-          <Link href="/login" className="font-medium text-brand-600 hover:underline">Sign in</Link>
+          <Link to="/login" className="font-medium text-brand-600 hover:underline">
+            Sign in
+          </Link>
         </p>
       </form>
     </Card>

@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { NavLink, useLocation } from 'react-router-dom';
 import { LayoutDashboard, ArrowRightLeft, Bell, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
@@ -13,16 +12,16 @@ const items = [
 ];
 
 export function SideNav() {
-  const pathname = usePathname();
+  const location = useLocation();
   return (
     <aside className="hidden w-56 shrink-0 md:block">
       <nav className="flex flex-col gap-1" aria-label="Primary">
         {items.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + '/');
+          const active = location.pathname === href || location.pathname.startsWith(href + '/');
           return (
-            <Link
+            <NavLink
               key={href}
-              href={href}
+              to={href}
               className={cn(
                 'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition',
                 active
@@ -32,7 +31,7 @@ export function SideNav() {
             >
               <Icon className="h-4 w-4" />
               {label}
-            </Link>
+            </NavLink>
           );
         })}
       </nav>

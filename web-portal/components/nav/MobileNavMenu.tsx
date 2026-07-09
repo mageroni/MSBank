@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { X } from 'lucide-react';
 
 const items = [
@@ -30,7 +30,7 @@ export function MobileNavMenu({ open, onClose }: { open: boolean; onClose: () =>
           {items.map(({ href, label }) => (
             <Link
               key={href}
-              href={href}
+              to={href}
               onClick={onClose}
               className="rounded-md px-3 py-2 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800"
             >

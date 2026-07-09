@@ -1,5 +1,6 @@
 import { PUBLIC_API_BASE_URL } from '@/lib/config';
 import type { Problem } from './types';
+import type { TokenPair } from './types';
 
 export class ApiError extends Error {
   status: number;
@@ -13,18 +14,26 @@ export class ApiError extends Error {
 
 type AccessTokenGetter = () => string | null;
 type AccessTokenSetter = (token: string | null) => void;
+type RefreshTokenGetter = () => string | null;
+type RefreshTokenSetter = (token: string | null) => void;
 
 let getAccessToken: AccessTokenGetter = () => null;
 let setAccessToken: AccessTokenSetter = () => undefined;
+let getRefreshToken: RefreshTokenGetter = () => null;
+let setRefreshToken: RefreshTokenSetter = () => undefined;
 let onUnauthorized: () => void = () => undefined;
 
 export function configureClient(opts: {
   getAccessToken: AccessTokenGetter;
   setAccessToken: AccessTokenSetter;
+  getRefreshToken: RefreshTokenGetter;
+  setRefreshToken: RefreshTokenSetter;
   onUnauthorized: () => void;
 }) {
   getAccessToken = opts.getAccessToken;
   setAccessToken = opts.setAccessToken;
+  getRefreshToken = opts.getRefreshToken;
+  setRefreshToken = opts.setRefreshToken;
   onUnauthorized = opts.onUnauthorized;
 }
 
@@ -36,12 +45,20 @@ export interface FetcherOptions extends Omit<RequestInit, 'body'> {
 }
 
 async function tryRefresh(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+
   try {
-    const res = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
+    const res = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken })
+    });
     if (!res.ok) return null;
-    const data = (await res.json()) as { accessToken: string };
-    setAccessToken(data.accessToken);
-    return data.accessToken;
+    const tokens = (await res.json()) as TokenPair;
+    setAccessToken(tokens.accessToken);
+    setRefreshToken(tokens.refreshToken);
+    return tokens.accessToken;
   } catch {
     return null;
   }
@@ -72,6 +89,8 @@ export async function fetcher<T>(path: string, opts: FetcherOptions = {}): Promi
     if (refreshed) {
       res = await doFetch(refreshed);
     } else {
+      setAccessToken(null);
+      setRefreshToken(null);
       onUnauthorized();
       throw new ApiError(401, 'Unauthorized');
     }

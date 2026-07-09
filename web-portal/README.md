@@ -1,12 +1,12 @@
 # MS Bank — Customer Web Portal
 
-A Next.js 14 (App Router) customer portal for the **microservice-bank** demo. All API calls go through the API Gateway (`/api/v1/*` and `/bff/v1/*`).
+A React + Vite customer portal for the **microservice-bank** demo. All API calls go through the API Gateway (`/api/v1/*` and `/bff/v1/*`).
 
 ## Features
 
 - Email/password login + registration (12+ char rule)
-- Memory-only access token + httpOnly refresh-token cookie (set by Next.js Route Handlers)
-- Server-component dashboard with total balance, balance-trend chart, accounts list, recent transfers, unread notifications badge
+- Memory-only access token + refresh-token persistence in browser storage
+- Client-rendered dashboard with total balance, balance-trend chart, accounts list, recent transfers, unread notifications badge
 - Account detail with paged transaction history (TanStack Query infinite query)
 - 4-step transfer wizard with client-generated `Idempotency-Key` and status polling
 - Notifications inbox with channel/status filters
@@ -17,7 +17,7 @@ A Next.js 14 (App Router) customer portal for the **microservice-bank** demo. Al
 
 ## Stack
 
-- **Next.js 14 App Router**, TypeScript strict, React 18
+- **React 18 + Vite + React Router**, TypeScript strict
 - **TailwindCSS** + hand-built UI primitives (`components/ui/`)
 - **TanStack Query v5** for client data fetching
 - **react-hook-form** + **zod** for forms/validation
@@ -31,26 +31,24 @@ A Next.js 14 (App Router) customer portal for the **microservice-bank** demo. Al
 
 ```
 web-portal/
-├── app/
-│   ├── (auth)/{login,register}/page.tsx
-│   ├── (app)/
-│   │   ├── layout.tsx                 (server-side auth guard)
-│   │   ├── dashboard/page.tsx         (server component → /bff/v1/dashboard)
-│   │   ├── accounts/[id]/page.tsx
-│   │   ├── transfer/page.tsx
-│   │   ├── notifications/page.tsx
-│   │   └── settings/security/page.tsx
-│   ├── api/auth/{login,refresh,logout}/route.ts
-│   ├── layout.tsx, page.tsx, providers.tsx
+├── src/
+│   ├── App.tsx                         (route definitions)
+│   ├── Providers.tsx                   (React Query + Auth providers)
+│   ├── layouts/{AppShell,AuthShell}.tsx
+│   ├── pages/
+│   │   ├── {LoginPage,RegisterPage,DashboardPage}.tsx
+│   │   ├── {AccountDetailPage,TransferPage}.tsx
+│   │   ├── {NotificationsPage,SecurityPage,NotFoundPage}.tsx
+│   └── main.tsx
 ├── components/{ui,dashboard,accounts,transfers,notifications,settings,nav}
 ├── lib/
-│   ├── api/{client,server,endpoints,types}.ts
+│   ├── api/{client,endpoints,types}.ts
 │   ├── auth/AuthProvider.tsx
 │   ├── format/{money,date}.ts
 │   ├── config.ts, queryClient.ts, useTheme.ts, cn.ts
 ├── styles/globals.css
 ├── tests/{unit/format.test.ts, e2e/smoke.spec.ts}
-├── Dockerfile, next.config.mjs, tailwind.config.ts, tsconfig.json
+├── Dockerfile, vite.config.ts, tailwind.config.ts, tsconfig.json
 └── package.json
 ```
 
@@ -60,8 +58,7 @@ web-portal/
 # 1. Configure
 cp .env.example .env.local
 # Edit if needed:
-#   NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
-#   API_BASE_URL=http://localhost:8080  (used by server components & route handlers)
+#   VITE_API_BASE_URL=http://localhost:8080
 
 # 2. Install
 npm install
@@ -84,19 +81,17 @@ npm run test:e2e           # Playwright (skips gracefully if portal/gateway down
 
 | Variable                  | Where        | Purpose                                       |
 | ------------------------- | ------------ | --------------------------------------------- |
-| `NEXT_PUBLIC_API_BASE_URL`| client       | Base URL used by browser-side fetches         |
-| `API_BASE_URL`            | server       | Used by route handlers & server components    |
+| `VITE_API_BASE_URL`       | client       | Base URL used by browser-side fetches         |
 | `E2E_BASE_URL`            | playwright   | Defaults to `http://localhost:3000`           |
 | `E2E_EMAIL`/`E2E_PASSWORD`| playwright   | Demo credentials for the smoke test           |
 | `E2E_DESTINATION`         | playwright   | Destination account UUID for the smoke test   |
 
 ## Auth flow
 
-1. `POST /api/auth/login` (Route Handler) proxies to `${API_BASE_URL}/api/v1/auth/login`.
-2. Refresh token is stored in `msbank_refresh` cookie (`httpOnly`, `sameSite=Lax`, `secure` in prod).
-3. Access token is returned to the client and held in React state (`AuthProvider`) — **never in storage**.
-4. The client `fetcher` automatically calls `/api/auth/refresh` on a 401 and retries once.
-5. Server components fetch the refresh cookie via `cookies()` and exchange it for a short-lived access token to call the gateway.
+1. `POST /api/v1/auth/login` is called directly from the browser to the API Gateway.
+2. Access token is stored in memory (`AuthProvider`), and refresh token is persisted for session restore.
+3. Client `fetcher` automatically calls `/api/v1/auth/refresh` on a 401 and retries once.
+4. On refresh failure, auth state is cleared and the user is redirected to `/login`.
 
 ## Money
 
@@ -107,12 +102,11 @@ npm run test:e2e           # Playwright (skips gracefully if portal/gateway down
 ```bash
 docker build -t msbank-web-portal .
 docker run --rm -p 3000:3000 \
-  -e NEXT_PUBLIC_API_BASE_URL=http://host.docker.internal:8080 \
-  -e API_BASE_URL=http://host.docker.internal:8080 \
+  -e VITE_API_BASE_URL=http://host.docker.internal:8080 \
   msbank-web-portal
 ```
 
-Image is multi-stage (`node:20-alpine` builder → `node:20-alpine` runner), runs as non-root `nextjs:nodejs` (uid 1001) using Next.js `output: 'standalone'`.
+Image is multi-stage (`node:20-alpine` builder → `nginx:alpine` runner) and serves the built SPA with fallback routing.
 
 ## Screenshots
 

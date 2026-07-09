@@ -1,10 +1,11 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { configureClient } from '@/lib/api/client';
 import { api } from '@/lib/api/endpoints';
-import type { User } from '@/lib/api/types';
+import { PUBLIC_API_BASE_URL, REFRESH_TOKEN_STORAGE_KEY } from '@/lib/config';
+import type { TokenPair, User } from '@/lib/api/types';
 
 interface AuthState {
   user: User | null;
@@ -18,8 +19,9 @@ interface AuthState {
 const AuthContext = createContext<AuthState | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const accessTokenRef = useRef<string | null>(null);
+  const refreshTokenRef = useRef<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -27,65 +29,99 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     accessTokenRef.current = token;
   }, []);
 
+  const setRefreshToken = useCallback((token: string | null) => {
+    refreshTokenRef.current = token;
+    if (typeof window !== 'undefined') {
+      if (token) {
+        window.localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, token);
+      } else {
+        window.localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+      }
+    }
+  }, []);
+
   const handleUnauthorized = useCallback(() => {
     accessTokenRef.current = null;
+    setRefreshToken(null);
     setUser(null);
-    router.replace('/login');
-  }, [router]);
+    navigate('/login', { replace: true });
+  }, [navigate, setRefreshToken]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    refreshTokenRef.current = window.localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+  }, []);
 
   useEffect(() => {
     configureClient({
       getAccessToken: () => accessTokenRef.current,
       setAccessToken,
+      getRefreshToken: () => refreshTokenRef.current,
+      setRefreshToken,
       onUnauthorized: handleUnauthorized
     });
-  }, [setAccessToken, handleUnauthorized]);
+  }, [setAccessToken, setRefreshToken, handleUnauthorized]);
 
   const refreshUser = useCallback(async () => {
+    const refreshToken = refreshTokenRef.current;
+    if (!refreshToken) {
+      setUser(null);
+      return;
+    }
+
     try {
-      const res = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
+      const res = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken })
+      });
       if (!res.ok) {
+        accessTokenRef.current = null;
+        setRefreshToken(null);
         setUser(null);
         return;
       }
-      const data = (await res.json()) as { accessToken: string };
-      accessTokenRef.current = data.accessToken;
+
+      const tokens = (await res.json()) as TokenPair;
+      accessTokenRef.current = tokens.accessToken;
+      setRefreshToken(tokens.refreshToken);
       const me = await api.auth.me();
       setUser(me);
     } catch {
+      accessTokenRef.current = null;
+      setRefreshToken(null);
       setUser(null);
     }
-  }, []);
+  }, [setRefreshToken]);
 
   useEffect(() => {
     void refreshUser().finally(() => setIsLoading(false));
   }, [refreshUser]);
 
   const login = useCallback(async (email: string, password: string, totpCode?: string) => {
-    const res = await fetch('/api/auth/login', {
+    const res = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({ email, password, totpCode })
     });
     if (!res.ok) {
       const problem = await res.json().catch(() => ({ title: 'Login failed' }));
       throw new Error(problem.title ?? 'Login failed');
     }
-    const data = (await res.json()) as { accessToken: string; user: User };
-    accessTokenRef.current = data.accessToken;
-    setUser(data.user);
-  }, []);
+
+    const tokens = (await res.json()) as TokenPair;
+    accessTokenRef.current = tokens.accessToken;
+    setRefreshToken(tokens.refreshToken);
+    const me = await api.auth.me();
+    setUser(me);
+  }, [setRefreshToken]);
 
   const logout = useCallback(async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-    } finally {
-      accessTokenRef.current = null;
-      setUser(null);
-      router.replace('/login');
-    }
-  }, [router]);
+    accessTokenRef.current = null;
+    setRefreshToken(null);
+    setUser(null);
+    navigate('/login', { replace: true });
+  }, [navigate, setRefreshToken]);
 
   const value = useMemo<AuthState>(() => ({
     user, isLoading, isAuthenticated: !!user, login, logout, refreshUser
