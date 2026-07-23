@@ -40,19 +40,22 @@ export function buildRoutes(deps: RouteDeps): Router {
   });
 
   router.get('/readyz', async (_req: Request, res: Response) => {
-    const checks: Record<string, 'ok' | 'fail'> = {};
-    try {
-      const pong = await redis.ping();
-      checks.redis = pong === 'PONG' ? 'ok' : 'fail';
-    } catch {
-      checks.redis = 'fail';
-    }
-    try {
-      const r = await axios.get(`${config.upstreams.auth}/healthz`, { timeout: 1_000 });
-      checks.auth = r.status >= 200 && r.status < 300 ? 'ok' : 'fail';
-    } catch {
-      checks.auth = 'fail';
-    }
+    const [redisResult, authResult] = await Promise.allSettled([
+      redis.ping(),
+      axios.get(`${config.upstreams.auth}/healthz`, { timeout: 1_000 }),
+    ]);
+
+    const checks: Record<string, 'ok' | 'fail'> = {
+      redis:
+        redisResult.status === 'fulfilled' && redisResult.value === 'PONG' ? 'ok' : 'fail',
+      auth:
+        authResult.status === 'fulfilled' &&
+        authResult.value.status >= 200 &&
+        authResult.value.status < 300
+          ? 'ok'
+          : 'fail',
+    };
+
     const ready = Object.values(checks).every((v) => v === 'ok');
     res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'not_ready', checks });
   });
