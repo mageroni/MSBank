@@ -4,6 +4,7 @@ description: Find untested behavior in newly opened pull requests and propose fo
 on:
   pull_request:
     types: [opened]
+  bots: ["copilot-swe-agent[bot]"]
 if: >-
   github.event.pull_request.head.repo.full_name == github.repository &&
   !startsWith(github.event.pull_request.head.ref, 'agentic-tests/') &&
@@ -112,7 +113,10 @@ the GitHub Actions token. This requires organization-level centralized Copilot
 billing; `COPILOT_GITHUB_TOKEN` is not needed for inference.
 Enable **Allow GitHub Actions to create and approve pull requests** in repository
 Actions settings. Fork PRs are deliberately excluded; no privileged
-`pull_request_target` execution is used. PRs created with `GITHUB_TOKEN` do not
+`pull_request_target` execution is used. The Copilot coding-agent bot is explicitly
+allowed alongside the default repository-role checks. Copilot-created PRs may
+still require a maintainer to approve GitHub Actions workflow runs.
+PRs created with `GITHUB_TOKEN` do not
 automatically trigger CI; maintainers must arrange CI before merging.
 After edits, compile with `gh aw compile pr-test-coverage --strict --validate
 --action-mode action --action-tag 924af5fdc64061cfbf66fb584c8b07e2ac230c60`
