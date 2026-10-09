@@ -11,6 +11,7 @@ if: >-
 permissions:
   contents: read
   pull-requests: read
+  copilot-requests: write
 checkout:
   ref: ${{ github.event.pull_request.head.sha }}
   fetch-depth: 0
@@ -106,8 +107,9 @@ Call `noop` with a brief reason whenever no safe, useful test PR can be created.
 
 ## Maintainer setup
 
-The default Copilot engine requires the repository's agentic-workflow
-authentication to be configured (for example, `COPILOT_GITHUB_TOKEN`).
+The default Copilot engine uses `copilot-requests: write` to authenticate with
+the GitHub Actions token. This requires organization-level centralized Copilot
+billing; `COPILOT_GITHUB_TOKEN` is not needed for inference.
 Enable **Allow GitHub Actions to create and approve pull requests** in repository
 Actions settings. Fork PRs are deliberately excluded; no privileged
 `pull_request_target` execution is used. PRs created with `GITHUB_TOKEN` do not
