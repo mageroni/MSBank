@@ -15,11 +15,13 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("DROP INDEX IF EXISTS ix_notifications_user_id")
+    with op.get_context().autocommit_block():
+        op.execute("DROP INDEX CONCURRENTLY IF EXISTS ix_notifications_user_id")
 
 
 def downgrade() -> None:
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_notifications_user_id "
-        "ON notifications (user_id)"
-    )
+    with op.get_context().autocommit_block():
+        op.execute(
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_notifications_user_id "
+            "ON notifications (user_id)"
+        )
