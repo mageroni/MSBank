@@ -41,7 +41,7 @@ _JWKS_CACHE: TTLCache[str, dict[str, Any]] = TTLCache(maxsize=4, ttl=300)
 
 
 async def _fetch_jwks(jwks_url: str) -> dict[str, Any]:
-    cached = _JWKS_CACHE.get(jwks_url)
+    cached = cast(dict[str, Any] | None, _JWKS_CACHE.get(jwks_url))
     if cached is not None:
         return cached
     async with httpx.AsyncClient(timeout=5.0) as client:
@@ -73,7 +73,9 @@ async def _verify_jwt(token: str, settings: Settings) -> dict[str, Any]:
     if settings.jwt_public_key_pem:
         key = settings.jwt_public_key_pem
     else:
-        jwks_url = settings.jwt_jwks_uri or (settings.jwt_issuer.rstrip("/") + "/.well-known/jwks.json")
+        jwks_url = settings.jwt_jwks_uri or (
+            settings.jwt_issuer.rstrip("/") + "/.well-known/jwks.json"
+        )
         jwks = await _fetch_jwks(jwks_url)
         key = _key_from_jwks(jwks, unverified_header.get("kid"))
 
