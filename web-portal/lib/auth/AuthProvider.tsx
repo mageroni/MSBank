@@ -22,6 +22,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const accessTokenRef = useRef<string | null>(null);
   const refreshTokenRef = useRef<string | null>(null);
+  const refreshUserPromiseRef = useRef<Promise<void> | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -63,34 +64,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [setAccessToken, setRefreshToken, handleUnauthorized]);
 
   const refreshUser = useCallback(async () => {
-    const refreshToken = refreshTokenRef.current;
-    if (!refreshToken) {
-      setUser(null);
-      return;
-    }
+    if (refreshUserPromiseRef.current) return refreshUserPromiseRef.current;
 
-    try {
-      const res = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken })
-      });
-      if (!res.ok) {
-        accessTokenRef.current = null;
-        setRefreshToken(null);
+    const refreshPromise = (async () => {
+      const refreshToken = refreshTokenRef.current;
+      if (!refreshToken) {
         setUser(null);
         return;
       }
 
-      const tokens = (await res.json()) as TokenPair;
-      accessTokenRef.current = tokens.accessToken;
-      setRefreshToken(tokens.refreshToken);
-      const me = await api.auth.me();
-      setUser(me);
-    } catch {
-      accessTokenRef.current = null;
-      setRefreshToken(null);
-      setUser(null);
+      try {
+        const res = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken })
+        });
+        if (!res.ok) {
+          accessTokenRef.current = null;
+          setRefreshToken(null);
+          setUser(null);
+          return;
+        }
+
+        const tokens = (await res.json()) as TokenPair;
+        accessTokenRef.current = tokens.accessToken;
+        setRefreshToken(tokens.refreshToken);
+        const me = await api.auth.me();
+        setUser(me);
+      } catch {
+        accessTokenRef.current = null;
+        setRefreshToken(null);
+        setUser(null);
+      }
+    })();
+    refreshUserPromiseRef.current = refreshPromise;
+
+    try {
+      await refreshPromise;
+    } finally {
+      if (refreshUserPromiseRef.current === refreshPromise) {
+        refreshUserPromiseRef.current = null;
+      }
     }
   }, [setRefreshToken]);
 
