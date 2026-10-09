@@ -33,6 +33,7 @@ networks:
     driver: bridge
 
 volumes:
+  auth-keys:
   pg-auth-data:
   pg-accounts-data:
   pg-transactions-data:
@@ -331,6 +332,8 @@ services:
     build:
       context: ../../services/auth-service
     container_name: auth-service
+    volumes:
+      - auth-keys:/etc/msbank/keys
     environment:
       <<: *otel-env
       OTEL_RESOURCE_ATTRIBUTES: service.name=auth-service,service.version=1.0.0,deployment.environment=local

@@ -21,7 +21,9 @@ const AuthContext = createContext<AuthState | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const accessTokenRef = useRef<string | null>(null);
-  const refreshTokenRef = useRef<string | null>(null);
+  const refreshTokenRef = useRef<string | null>(
+    typeof window === 'undefined' ? null : window.localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY)
+  );
   const refreshUserPromiseRef = useRef<Promise<void> | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -47,11 +49,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     navigate('/login', { replace: true });
   }, [navigate, setRefreshToken]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    refreshTokenRef.current = window.localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
-  }, []);
 
   useEffect(() => {
     configureClient({
@@ -81,7 +78,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
         if (!res.ok) {
           accessTokenRef.current = null;
-          setRefreshToken(null);
+          if (res.status === 401 || res.status === 403) {
+            setRefreshToken(null);
+          }
           setUser(null);
           return;
         }
@@ -93,7 +92,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(me);
       } catch {
         accessTokenRef.current = null;
-        setRefreshToken(null);
         setUser(null);
       }
     })();

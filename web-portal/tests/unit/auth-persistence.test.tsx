@@ -1,8 +1,8 @@
 import { StrictMode } from 'react';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { AuthProvider } from '@/lib/auth/AuthProvider';
+import { AuthProvider, useAuth } from '@/lib/auth/AuthProvider';
 import { ProtectedRoute } from '@/src/components/ProtectedRoute';
 import { REFRESH_TOKEN_STORAGE_KEY } from '@/lib/config';
 import type { User } from '@/lib/api/types';
@@ -14,6 +14,18 @@ const user: User = {
   lastName: 'User',
   roles: ['CUSTOMER'],
   createdAt: '2026-01-01T00:00:00Z'
+};
+
+const storage = new Map<string, string>();
+const localStorageMock: Storage = {
+  get length() {
+    return storage.size;
+  },
+  clear: () => storage.clear(),
+  getItem: (key) => storage.get(key) ?? null,
+  key: (index) => Array.from(storage.keys())[index] ?? null,
+  removeItem: (key) => { storage.delete(key); },
+  setItem: (key, value) => { storage.set(key, String(value)); }
 };
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -46,10 +58,16 @@ function App() {
   );
 }
 
+function LoginButton() {
+  const { login } = useAuth();
+  return <button onClick={() => void login('customer@example.com', 'ValidPassword123!')}>Sign in</button>;
+}
+
 describe('session persistence', () => {
   beforeEach(() => {
-    localStorage.clear();
-    localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, 'stored-refresh-token');
+    Object.defineProperty(window, 'localStorage', { configurable: true, value: localStorageMock });
+    window.localStorage.clear();
+    window.localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, 'stored-refresh-token');
   });
 
   afterEach(() => {
@@ -84,6 +102,55 @@ describe('session persistence', () => {
 
     expect(await screen.findByText('Dashboard')).toBeTruthy();
     expect(refreshRequests).toBe(1);
-    expect(localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY)).toBe('rotated-refresh-token');
+    expect(window.localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY)).toBe('rotated-refresh-token');
+  });
+
+  it('restores a session after login and a full provider remount', async () => {
+    window.localStorage.clear();
+    let refreshRequests = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/v1/auth/login')) {
+        return jsonResponse({
+          accessToken: 'login-access-token',
+          refreshToken: 'login-refresh-token',
+          tokenType: 'Bearer',
+          expiresIn: 900
+        });
+      }
+      if (url.endsWith('/api/v1/auth/refresh')) {
+        refreshRequests += 1;
+        return jsonResponse({
+          accessToken: 'restored-access-token',
+          refreshToken: 'rotated-refresh-token',
+          tokenType: 'Bearer',
+          expiresIn: 900
+        });
+      }
+      return jsonResponse(user);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const loginView = render(
+      <MemoryRouter initialEntries={['/login']}>
+        <AuthProvider><LoginButton /></AuthProvider>
+      </MemoryRouter>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY)).toBe('login-refresh-token');
+    });
+    loginView.unmount();
+
+    render(
+      <StrictMode>
+        <App />
+      </StrictMode>
+    );
+
+    expect(await screen.findByText('Dashboard')).toBeTruthy();
+    expect(refreshRequests).toBe(1);
+    expect(window.localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY)).toBe('rotated-refresh-token');
   });
 });
