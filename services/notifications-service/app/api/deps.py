@@ -73,7 +73,9 @@ async def _verify_jwt(token: str, settings: Settings) -> dict[str, Any]:
     if settings.jwt_public_key_pem:
         key = settings.jwt_public_key_pem
     else:
-        jwks_url = settings.jwt_jwks_uri or (settings.jwt_issuer.rstrip("/") + "/.well-known/jwks.json")
+        jwks_url = settings.jwt_jwks_uri or (
+            settings.jwt_issuer.rstrip("/") + "/.well-known/jwks.json"
+        )
         jwks = await _fetch_jwks(jwks_url)
         key = _key_from_jwks(jwks, unverified_header.get("kid"))
 
