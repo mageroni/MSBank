@@ -1,11 +1,10 @@
 # --- build stage ---
-FROM eclipse-temurin:21-jdk AS build
+FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /app
-COPY .mvn .mvn
-COPY mvnw pom.xml ./
-RUN ./mvnw -B -q dependency:go-offline
+COPY pom.xml ./
+RUN mvn -B -q dependency:go-offline
 COPY src src
-RUN ./mvnw -B -q -DskipTests package && \
+RUN mvn -B -q -DskipTests package && \
     cp target/accounts-service.jar /app/app.jar
 
 # --- runtime stage ---

@@ -1,13 +1,12 @@
 # syntax=docker/dockerfile:1.6
 
 # ---- Build stage ----
-FROM eclipse-temurin:21-jdk AS build
+FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /workspace
-COPY .mvn .mvn
-COPY mvnw pom.xml ./
-RUN chmod +x mvnw && ./mvnw -q -B -DskipTests dependency:go-offline
+COPY pom.xml ./
+RUN mvn -q -B -DskipTests dependency:go-offline
 COPY src src
-RUN ./mvnw -q -B -DskipTests package && \
+RUN mvn -q -B -DskipTests package && \
     cp target/auth-service.jar app.jar
 
 # ---- Runtime stage ----
