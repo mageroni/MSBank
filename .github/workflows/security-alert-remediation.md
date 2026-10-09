@@ -99,6 +99,7 @@ For each group:
 
 1. Start a new branch from the originally checked-out commit
    (`git checkout -b <short-slug> <original-sha>`) so PRs are independent.
+   The `security-fix/` prefix is added automatically when the PR is created.
 2. Make the minimal change that resolves the alert: upgrade to the lowest
    patched version, regenerate the lockfile with the ecosystem's tool (for
    example `npm install --package-lock-only`, `go mod tidy`, `./mvnw`), or fix
@@ -108,9 +109,10 @@ For each group:
    `go test -short ./...` and `go vet ./...`; Python 3.12 `pytest` and
    `ruff check`; Node 20+ `npm ci`, lint, and `npm test -- --run`). If
    validation cannot run or fails, do not open the PR; move the alert to
-   "Manual" with the blocker.
+   "Manual" with the blocker. Do the same if the patch exceeds 100 files or
+   4 MB.
 4. Commit and call `create_pull_request` with a `temporary_id`
-   (`aw_` plus 3-8 alphanumeric characters), the branch name, and a body that
+   (`aw_` plus 3-8 alphanumeric characters), the exact local branch name, and a body that
    includes the alert links, severity, root cause, the change made, the exact
    validation commands and results, and one marker line per alert, such as
    `<!-- security-alert:dependabot:42 -->`. Do not use closing keywords and
