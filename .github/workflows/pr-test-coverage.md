@@ -85,7 +85,7 @@ default branch. Do not modify or push to the original branch.
   inside the agent sandbox, never in custom workflow steps.
 - Use the affected service's existing tools: Java 21/Maven `./mvnw -B -ntp test`
   with focused test selection; Go `go test -short ./...` and `go vet ./...`;
-  Python 3.12/pytest with focused test paths and `ruff check`; Node 20+/Vitest
+  Python 3.12/pytest with focused test paths and `ruff check`; Node 24+/Vitest
   `npm test -- --run` with focused paths and existing lint/typecheck scripts.
   Install only dependencies already declared by the repository; use `npm ci`
   when a lockfile exists. Format new Go tests with `gofmt`.
