@@ -53,7 +53,7 @@ stack — wired together end-to-end and runnable with one command.
 
 | # | Service                  | Language / Framework | Port | Pattern showcase                  |
 |---|--------------------------|----------------------|------|-----------------------------------|
-| 1 | `api-gateway`            | Node 20 + TypeScript | 8080 | BFF, circuit breaker, idempotency |
+| 1 | `api-gateway`            | Node 24 + TypeScript | 8080 | BFF, circuit breaker, idempotency |
 | 2 | `auth-service`           | Java 21 + Spring Boot| 8081 | JWT RS256, JWKS, TOTP MFA, outbox |
 | 3 | `accounts-service`       | Java 21 + Spring Boot| 8082 | **Event Sourcing + CQRS**, outbox |
 | 4 | `transactions-service`   | Go 1.22 + chi        | 8083 | **Saga orchestration** + compensations |
