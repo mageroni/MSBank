@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -12,7 +11,6 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 
-	"github.com/msbank/transactions-service/internal/auth"
 	"github.com/msbank/transactions-service/internal/ledger"
 	"github.com/msbank/transactions-service/internal/saga"
 )
@@ -246,14 +244,4 @@ func (h *Handler) ListTransfers(w http.ResponseWriter, r *http.Request) {
 		out = append(out, toDTO(t))
 	}
 	writeJSON(w, http.StatusOK, out)
-}
-
-// helper to ensure auth claims are present; callers may use this in protected
-// routes to read the current user.
-func requireAuth(r *http.Request) (auth.Claims, error) {
-	c, ok := auth.FromContext(r.Context())
-	if !ok {
-		return c, fmt.Errorf("no claims")
-	}
-	return c, nil
 }

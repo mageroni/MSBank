@@ -27,12 +27,12 @@ const (
 
 // Saga step names and statuses.
 const (
-	StepReserveSource       = "RESERVE_SOURCE"
-	StepDebitSource         = "DEBIT_SOURCE"
-	StepCreditDestination   = "CREDIT_DESTINATION"
-	StepReleaseReservation  = "RELEASE_RESERVATION"
-	StepReverseDebit        = "REVERSE_DEBIT"
-	StepEmitNotification    = "EMIT_NOTIFICATION"
+	StepReserveSource      = "RESERVE_SOURCE"
+	StepDebitSource        = "DEBIT_SOURCE"
+	StepCreditDestination  = "CREDIT_DESTINATION"
+	StepReleaseReservation = "RELEASE_RESERVATION"
+	StepReverseDebit       = "REVERSE_DEBIT"
+	StepEmitNotification   = "EMIT_NOTIFICATION"
 
 	StepStatusStarted     = "STARTED"
 	StepStatusSucceeded   = "SUCCEEDED"
@@ -229,7 +229,6 @@ func (r *Repo) ListTransfers(ctx context.Context, f ListFilter) ([]*Transfer, er
 	if f.To != nil {
 		q += fmt.Sprintf(" AND created_at <= $%d", i)
 		args = append(args, *f.To)
-		i++
 	}
 	limit := f.Limit
 	if limit <= 0 || limit > 200 {

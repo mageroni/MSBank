@@ -1,6 +1,6 @@
 module github.com/msbank/transactions-service
 
-go 1.25.0
+go 1.26.3
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0

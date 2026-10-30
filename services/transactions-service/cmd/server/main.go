@@ -71,7 +71,11 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 			return fmt.Errorf("redis url: %w", err)
 		}
 		rdb = redis.NewClient(opt)
-		defer rdb.Close()
+		defer func() {
+			if err := rdb.Close(); err != nil {
+				logger.Warn("redis close failed", "err", err)
+			}
+		}()
 	}
 	idemStore := idem.NewStore(rdb)
 
@@ -152,7 +156,15 @@ func runMigrations(dbURL string, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	defer m.Close()
+	defer func() {
+		sourceErr, dbErr := m.Close()
+		if sourceErr != nil {
+			logger.Warn("migration source close failed", "err", sourceErr)
+		}
+		if dbErr != nil {
+			logger.Warn("migration database close failed", "err", dbErr)
+		}
+	}()
 	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return err
 	}
