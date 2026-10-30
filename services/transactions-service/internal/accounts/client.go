@@ -43,10 +43,10 @@ type DepositRequest struct {
 }
 
 type httpClient struct {
-	base          string
-	token         string
-	hc            *http.Client
-	breaker       *gobreaker.CircuitBreaker
+	base    string
+	token   string
+	hc      *http.Client
+	breaker *gobreaker.CircuitBreaker
 }
 
 // NewHTTPClient builds an accounts-service HTTP client wrapped with a circuit
@@ -86,7 +86,9 @@ func (c *httpClient) do(ctx context.Context, method, path string, body any, out 
 			if err != nil {
 				return nil, err
 			}
-			defer resp.Body.Close()
+			defer func() {
+				_ = resp.Body.Close()
+			}()
 			if resp.StatusCode >= 500 {
 				return nil, fmt.Errorf("accounts-service status %d", resp.StatusCode)
 			}
