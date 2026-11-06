@@ -114,7 +114,7 @@ and an `httptest` stub for accounts-service. They are guarded by
 docker build -t msbank/transactions-service .
 ```
 
-Multi-stage build: `golang:1.22-alpine` → `gcr.io/distroless/static:nonroot`.
+Multi-stage build: `golang:1.26-alpine` → `gcr.io/distroless/static:nonroot`.
 
 ## Layout
 
