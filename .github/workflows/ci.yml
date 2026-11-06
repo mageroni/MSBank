@@ -89,7 +89,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.22'
+          go-version-file: services/transactions-service/go.mod
           cache-dependency-path: services/transactions-service/go.sum
       - name: Vet
         working-directory: services/transactions-service
@@ -156,7 +156,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: npm
           cache-dependency-path: ${{ matrix.workspace }}/package-lock.json
       - name: Install
@@ -189,7 +189,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with: { node-version: '20' }
+        with: { node-version: '24' }
       - name: Install linters
         run: |
           npm install -g @redocly/cli@1.16.0 @asyncapi/cli@2.5.0
