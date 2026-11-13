@@ -1,6 +1,6 @@
 # API Gateway
 
-Edge API + BFF for the `microservice-bank` platform. Written in TypeScript on Node 20 (ESM).
+Edge API + BFF for the `microservice-bank` platform. Written in TypeScript on Node 24 (ESM).
 
 ## Responsibilities
 

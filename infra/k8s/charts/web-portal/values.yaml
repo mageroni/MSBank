@@ -113,7 +113,7 @@ env: []
 extraVolumes: []
 extraVolumeMounts: []
 
-readOnlyRootFilesystem: false  # Next.js needs writable .next/cache at runtime
+readOnlyRootFilesystem: false
 
 networkPolicy:
   enabled: true
@@ -129,4 +129,3 @@ ingress:
 extraEnv:
   NEXT_PUBLIC_API_BASE_URL: "https://msbank.example.com"
   PORT: "3000"
-
