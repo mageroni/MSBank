@@ -26,7 +26,7 @@ infra/k8s/
     ├── accounts-service/           # Java, port 8082
     ├── transactions-service/       # Go,   port 8083
     ├── notifications-service/      # Python, port 8084
-    └── web-portal/                 # Next.js, port 3000 (+ optional standalone Ingress)
+    └── web-portal/                 # React + Vite SPA, port 3000 (+ optional standalone Ingress)
 ```
 
 ## What you get per service

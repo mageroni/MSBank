@@ -133,7 +133,7 @@ write_chart_yaml auth-service           "Java auth service for microservice-bank
 write_chart_yaml accounts-service       "Java accounts service for microservice-bank."
 write_chart_yaml transactions-service   "Go transactions service for microservice-bank."
 write_chart_yaml notifications-service  "Python notifications service for microservice-bank."
-write_chart_yaml web-portal             "Next.js web portal for microservice-bank."
+write_chart_yaml web-portal             "React and Vite web portal for microservice-bank."
 
 # api-gateway: ingress-controller traffic allowed
 write_values api-gateway 8080 "00000000-0000-0000-0000-000000000001" "
@@ -176,7 +176,7 @@ extraEnv:
 "
 
 write_values web-portal 3000 "00000000-0000-0000-0000-000000000006" "
-readOnlyRootFilesystem: false  # Next.js needs writable .next/cache at runtime
+readOnlyRootFilesystem: false
 
 networkPolicy:
   enabled: true
