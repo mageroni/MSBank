@@ -447,7 +447,7 @@ services:
       retries: 10
       start_period: 30s
 
-  # web-portal — customer-facing Next.js UI
+  # web-portal — customer-facing React + Vite UI
   web-portal:
     <<: *app-base
     build:
