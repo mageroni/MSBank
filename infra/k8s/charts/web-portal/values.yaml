@@ -125,7 +125,3 @@ ingress:
   # When false (default), traffic to app.<domain> is handled by the api-gateway
   # umbrella Ingress. Set true to publish a separate Ingress object for web-portal.
   standalone: false
-
-extraEnv:
-  NEXT_PUBLIC_API_BASE_URL: "https://msbank.example.com"
-  PORT: "3000"
