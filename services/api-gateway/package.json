@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Edge API Gateway / BFF for the microservice-bank platform.",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",

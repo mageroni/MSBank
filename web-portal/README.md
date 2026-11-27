@@ -54,6 +54,8 @@ web-portal/
 
 ## Run
 
+Use Node.js 24 or later.
+
 ```bash
 # 1. Configure
 cp .env.example .env.local
@@ -106,7 +108,7 @@ docker run --rm -p 3000:3000 \
   msbank-web-portal
 ```
 
-Image is multi-stage (`node:20-alpine` builder → `nginx:alpine` runner) and serves the built SPA with fallback routing.
+Image is multi-stage (`node:24-alpine` builder → `nginx:alpine` runner) and serves the built SPA with fallback routing.
 
 ## Screenshots
 
